@@ -1,283 +1,254 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { db, auth } from '../../lib/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { generateMathQuestions } from '../../lib/questionGenerator';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, Crown, Coins, Home, Play, Loader2 } from 'lucide-react';
-import { generateMathQuestions, MathQuestion } from '../../lib/questionGenerator';
+import { Trophy, Timer, CheckCircle2, XCircle, Home, Rocket, Coins, ArrowRight, Brain } from 'lucide-react';
 
-function SinglePlayerContent() {
+export default function SingleplayerPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const kelasParam = parseInt(searchParams.get('kelas') || '1');
-  const soalParam = parseInt(searchParams.get('jumlahSoal') || '10');
-
-  const [status, setStatus] = useState<'preparing' | 'playing' | 'finished'>('preparing');
-  const [questions, setQuestions] = useState<MathQuestion[]>([]);
+  const [status, setStatus] = useState<'lobby' | 'playing' | 'finished'>('lobby');
+  const [tier, setTier] = useState('SD');
+  const [kelas, setKelas] = useState(1);
+  const [questions, setQuestions] = useState<any[]>([]);
   const [progress, setProgress] = useState(0);
   const [score, setScore] = useState(0);
-  const [correctAnswers, setCorrectAnswers] = useState(0);
-  const [countdownTimer, setCountdownTimer] = useState<number | null>(3);
-  const [elapsedTime, setElapsedTime] = useState('00:00');
-  const [startTimeMs, setStartTimeMs] = useState<number | null>(null);
-  const [finishTimeStr, setFinishTimeStr] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [earnedCoins, setEarnedCoins] = useState<number | null>(null);
+  const [startTime, setStartTime] = useState<number>(0);
+  const [finishTime, setFinishTime] = useState("");
+  const [answerState, setAnswerState] = useState<'idle' | 'correct' | 'wrong'>('idle');
+  const [playerData, setPlayerData] = useState<any>(null);
 
-  // Initialize
   useEffect(() => {
-    const generated = generateMathQuestions(kelasParam, soalParam);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setQuestions(generated);
-  }, [kelasParam, soalParam]);
+    const fetchPlayer = async () => {
+      if (auth.currentUser) {
+        const pRef = doc(db, 'players', auth.currentUser.uid);
+        const pSnap = await getDoc(pRef);
+        if (pSnap.exists()) setPlayerData(pSnap.data());
+      }
+    };
+    fetchPlayer();
+  }, []);
 
-  // Countdown timer logic
-  useEffect(() => {
-    if (status === 'preparing') {
-        if (countdownTimer === null || countdownTimer <= 0) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setStatus('playing');
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setStartTimeMs(Date.now());
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setCountdownTimer(null);
-        } else {
-            const timer = setTimeout(() => {
-                setCountdownTimer(prev => prev! - 1);
-            }, 1000);
-            return () => clearTimeout(timer);
-        }
-    }
-  }, [status, countdownTimer]);
-
-  // Elapsed time tracker
-  useEffect(() => {
-    if (status === 'playing' && startTimeMs) {
-      const interval = setInterval(() => {
-        const ms = Date.now() - startTimeMs;
-        const totalSeconds = Math.floor(ms / 1000);
-        const minutes = Math.floor(totalSeconds / 60);
-        const seconds = totalSeconds % 60;
-        setElapsedTime(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [status, startTimeMs]);
-
-  const handleLevelQuit = () => {
-     router.push('/');
+  const startSoloGame = () => {
+    const q = generateMathQuestions(kelas, 10);
+    setQuestions(q);
+    setProgress(0);
+    setScore(0);
+    setStartTime(Date.now());
+    setStatus('playing');
   };
 
-  const handleAnswerSubmit = (selectedOptionIndex: number) => {
-    if (isSubmitting || status !== 'playing') return;
-    setIsSubmitting(true);
+  const handleAnswer = (selected: string) => {
+    if (answerState !== 'idle') return;
 
-    const currentQuestion = questions[progress];
-    const isCorrect = currentQuestion.options[selectedOptionIndex] === currentQuestion.correctAnswer;
-
-    const newCorrectCount = isCorrect ? correctAnswers + 1 : correctAnswers;
-    if (isCorrect) setCorrectAnswers(newCorrectCount);
+    const isCorrect = selected === questions[progress].correctAnswer;
+    if (isCorrect) setScore(s => s + 1);
+    setAnswerState(isCorrect ? 'correct' : 'wrong');
 
     setTimeout(() => {
-      if (progress + 1 >= questions.length) {
-         // Finished Game Let's compute
-         const finalScore = Math.round((newCorrectCount / questions.length) * 100);
-         const ms = Date.now() - startTimeMs!;
-         const totalSeconds = Math.floor(ms / 1000);
-         const minutes = Math.floor(totalSeconds / 60);
-         const seconds = totalSeconds % 60;
-         const finalTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-         
-         setScore(finalScore);
-         setFinishTimeStr(finalTime);
-         
-         // Compute coins
-         const baseReward = questions.length * 5;
-         let multiplier = 1 + (Math.max(0, (kelasParam - 1)) * 0.2);
-         if (kelasParam >= 7 && kelasParam <= 9) multiplier = 3;
-         if (kelasParam >= 10) multiplier = 5;
-         
-         const rankBonus = finalScore >= 90 ? 200 : (finalScore >= 60 ? 50 : 0);
-         const totalCoins = Math.round(baseReward * multiplier) + rankBonus;
-         
-         setEarnedCoins(totalCoins);
-
-         // Save to localstorage
-         const currentLocalCoins = parseInt(localStorage.getItem('eduquest_coins') || '0');
-         localStorage.setItem('eduquest_coins', (currentLocalCoins + totalCoins).toString());
-
-         setStatus('finished');
+      if (progress + 1 < questions.length) {
+        setProgress(p => p + 1);
+        setAnswerState('idle');
       } else {
-         setProgress(progress + 1);
+        const time = ((Date.now() - startTime) / 1000).toFixed(2) + "s";
+        setFinishTime(time);
+        setStatus('finished');
+        updatePermanentStats(score + (isCorrect ? 1 : 0));
       }
-      setIsSubmitting(false);
-    }, 400);
+    }, 600);
   };
 
-  if (status === 'finished') {
-    return (
-      <main className="min-h-screen flex flex-col items-center py-8 md:py-12 px-4 lg:px-8 bg-slate-50 overflow-x-hidden">
-        <h1 className="text-4xl md:text-6xl font-black uppercase text-slate-900 mb-2 tracking-tighter text-center">
-            Hasil <span className="text-indigo-600">Latihan</span>
-        </h1>
-        
-        <div className="mt-8 mb-12 flex flex-col items-center gap-4 w-full max-w-sm">
-           <div className="w-40 h-40 bg-indigo-600 border-4 border-slate-900 rounded-[32px] flex flex-col items-center justify-center text-white shadow-[8px_8px_0px_0px_#0f172a]">
-              <span className="text-6xl font-black">{score}%</span>
-              <span className="uppercase font-bold tracking-widest text-indigo-200 text-xs mt-1">Skor Akhir</span>
-           </div>
-           
-           <div className="w-full bg-white border-4 border-slate-900 p-6 rounded-2xl shadow-[4px_4px_0px_0px_#0f172a] text-center">
-              <span className="text-xs uppercase font-black text-slate-500 tracking-widest">Waktu Pengerjaan</span>
-              <div className="text-3xl font-black text-slate-900">{finishTimeStr}</div>
-           </div>
-        </div>
-
-        {/* Reward Box */}
-        {earnedCoins !== null && (
-            <motion.div 
-               initial={{ scale: 0.8, opacity: 0 }}
-               animate={{ scale: 1, opacity: 1 }}
-               transition={{ type: 'spring', delay: 0.3 }}
-               className="bg-amber-100 border-4 border-slate-900 p-6 md:p-8 rounded-3xl w-full max-w-sm text-center shadow-[8px_8px_0px_0px_#0f172a] relative overflow-hidden mb-12"
-            >
-               <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-amber-200/50 to-transparent"></div>
-               <div className="relative z-10">
-                  <h3 className="text-sm font-black uppercase tracking-[0.2em] text-amber-700 mb-2">Total Hadiah</h3>
-                  <div className="flex items-center justify-center gap-4">
-                     <Coins size={48} className="text-amber-500 drop-shadow-sm" />
-                     <span className="text-5xl md:text-7xl font-black text-slate-900 tracking-tighter">+{earnedCoins}</span>
-                  </div>
-                  <div className="mt-2 flex flex-col items-center">
-                    <p className="text-xs font-black uppercase text-amber-600 tracking-widest">Koin ditambahkan ke profil</p>
-                    {kelasParam >= 7 && (
-                      <span className="mt-1 inline-block px-3 py-1 bg-amber-500 text-white rounded-lg text-xs font-black uppercase tracking-[0.1em] animate-bounce">
-                        Bonus Kesulitan: {kelasParam >= 10 ? '5x' : '3x'}
-                      </span>
-                    )}
-                    {kelasParam < 7 && kelasParam > 1 && (
-                       <span className="mt-1 text-[10px] font-black uppercase text-amber-500 opacity-60">
-                        Multiplier SD: {(1 + (kelasParam - 1) * 0.2).toFixed(1)}x
-                       </span>
-                    )}
-                  </div>
-               </div>
-            </motion.div>
-        )}
-
-        <button 
-           onClick={() => router.push('/')}
-           className="px-8 py-5 bg-slate-900 border-4 border-slate-900 rounded-2xl text-white font-black text-xl uppercase tracking-widest shadow-[6px_6px_0px_0px_#0f172a] hover:translate-x-1 hover:translate-y-1 hover:shadow-none hover:bg-slate-800 transition-all flex items-center gap-3 mb-12"
-        >
-           <Home size={24} /> Ke Beranda
-        </button>
-      </main>
-    );
-  }
-
-  const currentQuestion = questions[progress];
+  const updatePermanentStats = async (finalScore: number) => {
+    if (!auth.currentUser) return;
+    
+    // Multiplier logic
+    let multiplier = 1;
+    if (tier === 'SMP') multiplier = 2;
+    if (tier === 'SMA') multiplier = 3;
+    
+    const coinsEarned = finalScore * multiplier;
+    
+    const pRef = doc(db, 'players', auth.currentUser.uid);
+    const pSnap = await getDoc(pRef);
+    
+    if (pSnap.exists()) {
+      const current = pSnap.data().coins || 0;
+      await updateDoc(pRef, { 
+        coins: current + coinsEarned,
+        updatedAt: new Date()
+      });
+      setPlayerData({ ...pSnap.data(), coins: current + coinsEarned });
+    } else {
+      await updateDoc(pRef, {
+        playerName: localStorage.getItem('playerName') || 'Pemain',
+        uid: auth.currentUser.uid,
+        coins: coinsEarned,
+        updatedAt: new Date()
+      });
+    }
+  };
 
   return (
-    <main className="min-h-screen flex flex-col items-center py-8 md:py-12 px-4 lg:px-8 bg-slate-50 overflow-x-hidden">
-        {/* Countdown Overlay during 'preparing' */ }
-        {status === 'preparing' && countdownTimer !== null && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/90 backdrop-blur-sm">
-                <motion.div
-                    key={countdownTimer}
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 1.5, opacity: 0 }}
-                    className="text-[150px] md:text-[250px] font-black text-white drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)]"
-                >
-                    {countdownTimer > 0 ? countdownTimer : 'STAR!'}
-                </motion.div>
-                <div className="absolute top-20 md:top-32 text-center text-slate-300 font-black tracking-[0.3em] uppercase text-xl">
-                    Bersiaplah!
-                </div>
-            </div>
-        )}
-
-        {/* Realtime Compact Progress Bar */}
-        <div className={`w-full max-w-2xl mb-6`}>
-            <div className="flex items-center justify-between mb-3 px-2">
-               <span className="text-xs font-black tracking-widest uppercase text-slate-500 bg-white px-3 py-1 rounded-md border-2 border-slate-900 shadow-[2px_2px_0px_0px_#0f172a]">Single Player</span>
-               <div className="flex bg-white border-2 border-slate-900 px-3 py-1 rounded-md shadow-[2px_2px_0px_0px_#0f172a] items-center gap-2">
-                 <span className="text-xs font-black tracking-widest text-slate-500 uppercase">⏱️ {elapsedTime}</span>
-               </div>
-            </div>
-
-            <div className="bg-white border-4 border-slate-900 rounded-xl p-3 shadow-[4px_4px_0px_0px_#0f172a]">
-                <div className="relative">
-                    <div className="h-6 bg-slate-100 rounded-md border-2 border-slate-900/10 w-full overflow-hidden relative">
-                       <div className="h-full bg-indigo-50 border-r-2 border-slate-900" style={{ width: `${(progress / soalParam) * 100}%` }}></div>
-                    </div>
-                    <motion.div
-                       className="absolute top-1/2 -translate-y-1/2 bg-amber-400 border-2 border-slate-900 text-slate-900 px-3 py-0.5 rounded-full text-[10px] font-black uppercase shadow-sm z-10 whitespace-nowrap"
-                       animate={{ left: `max(0%, min(100%, ${(progress / soalParam) * 100}%))` }}
-                       transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-                       style={{ translateX: '-50%' }}
-                    >
-                       Kamu
-                    </motion.div>
-                </div>
-            </div>
-        </div>
-
-        {/* Action Header */}
-        <header className="w-full max-w-2xl flex justify-between items-center mb-6 px-2">
-            <button 
-                onClick={handleLevelQuit}
-                className="px-4 py-2 border-2 border-slate-900 rounded-lg text-slate-900 font-black uppercase text-xs tracking-widest shadow-[2px_2px_0px_0px_#0f172a] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all flex items-center gap-2 bg-white"
-            >
-                <LogOut size={14} strokeWidth={3} /> Akhiri Sesi
-            </button>
-            <div className="text-sm font-black text-slate-500 uppercase tracking-widest bg-white border-2 border-slate-900 px-3 py-1.5 rounded-lg shadow-[2px_2px_0px_0px_#0f172a]">
-               Soal {progress + 1} / {soalParam}
-            </div>
+    <main className="min-h-screen bg-[#FDF6E3] p-6 font-sans">
+      <div className="max-w-xl mx-auto">
+        <header className="flex justify-between items-center mb-12">
+           <button onClick={() => router.push('/')} className="bg-white border-3 border-slate-900 p-3 rounded-2xl shadow-[4px_4px_0px_0px_#0f172a] hover:bg-amber-100 transition-colors">
+              <Home size={24} />
+           </button>
+           {playerData && (
+             <div className="bg-amber-400 border-3 border-slate-900 px-6 py-2 rounded-full shadow-[4px_4px_0px_0px_#0f172a] flex items-center gap-2 font-black">
+                <Coins size={20} className="text-white drop-shadow-[1px_1px_0px_#000]" />
+                {playerData.coins} KOIN
+             </div>
+           )}
         </header>
 
-        {/* Gameplay Area */}
-        {status === 'playing' && currentQuestion && (
+        <AnimatePresence mode="wait">
+          {status === 'lobby' && (
             <motion.div 
-               key={progress} 
-               initial={{ opacity: 0, y: 20 }}
-               animate={{ opacity: 1, y: 0 }}
-               className="w-full max-w-2xl"
+               key="lobby"
+               initial={{ opacity: 0, scale: 0.9 }}
+               animate={{ opacity: 1, scale: 1 }}
+               className="bg-white border-4 border-slate-900 p-8 rounded-[2.5rem] shadow-[10px_10px_0px_0px_#0f172a]"
             >
-               <div className="bg-white border-4 border-slate-900 rounded-[32px] p-8 md:p-12 mb-6 shadow-[8px_8px_0px_0px_#0f172a]">
-                  <h3 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter text-center leading-tight">
-                     {currentQuestion.question}
-                  </h3>
+               <div className="w-20 h-20 bg-indigo-100 rounded-3xl mx-auto mb-6 flex items-center justify-center border-4 border-slate-900 rotate-6 shadow-[6px_6px_0px_0px_#4f46e5]">
+                  <Brain className="text-indigo-600" size={40} />
+               </div>
+               <h1 className="text-3xl font-black text-slate-900 text-center mb-8 tracking-tighter">MODE LATIHAN SOLO</h1>
+               
+               <div className="space-y-6 mb-10">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Pilih Tier</label>
+                    <div className="grid grid-cols-3 gap-3">
+                       {['SD', 'SMP', 'SMA'].map(t => (
+                         <button 
+                           key={t}
+                           onClick={() => {
+                             setTier(t);
+                             setKelas(t === 'SD' ? 1 : t === 'SMP' ? 7 : 10);
+                           }}
+                           className={`py-4 rounded-2xl border-4 border-slate-900 font-black transition-all ${tier === t ? 'bg-amber-400 text-slate-900 shadow-[4px_4px_0px_0px_#0f172a]' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                         >
+                           {t}
+                         </button>
+                       ))}
+                    </div>
+                  </div>
+
+                  <div>
+                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Kelas</label>
+                     <select 
+                       value={kelas}
+                       onChange={(e) => setKelas(Number(e.target.value))}
+                       className="w-full bg-slate-50 border-3 border-slate-900 p-4 rounded-xl font-black focus:outline-none focus:border-amber-500"
+                     >
+                       {tier === 'SD' && [1,2,3,4,5,6].map(k => <option key={k} value={k}>Kelas {k}</option>)}
+                       {tier === 'SMP' && [7,8,9].map(k => <option key={k} value={k}>Kelas {k}</option>)}
+                       {tier === 'SMA' && [10,11,12].map(k => <option key={k} value={k}>Kelas {k}</option>)}
+                     </select>
+                  </div>
                </div>
 
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {currentQuestion.options.map((option, idx) => (
-                     <motion.button
-                        key={idx}
-                        disabled={isSubmitting}
-                        whileHover={isSubmitting ? {} : { y: -2, x: -2, boxShadow: "8px 8px 0px 0px #0f172a" }}
-                        whileTap={isSubmitting ? {} : { scale: 0.98, y: 2, x: 2, boxShadow: "2px 2px 0px 0px #0f172a" }}
-                        onClick={() => handleAnswerSubmit(idx)}
-                        className={`w-full bg-white border-4 border-slate-900 p-6 rounded-2xl text-2xl md:text-3xl font-black text-slate-900 shadow-[6px_6px_0px_0px_#0f172a] hover:bg-slate-50 transition-all text-center ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                     >
-                        {option}
-                     </motion.button>
+               <button 
+                 onClick={startSoloGame}
+                 className="w-full bg-emerald-500 text-white font-black py-5 rounded-2xl border-4 border-slate-900 shadow-[8px_8px_0px_0px_#0f172a] hover:bg-emerald-400 active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all text-xl flex items-center justify-center gap-3"
+               >
+                 MULAI LATIHAN <ArrowRight />
+               </button>
+            </motion.div>
+          )}
+
+          {status === 'playing' && questions[progress] && (
+            <motion.div 
+               key="playing"
+               initial={{ opacity: 0, y: 20 }}
+               animate={{ opacity: 1, y: 0 }}
+               className="flex flex-col"
+            >
+               <div className="flex justify-between items-center mb-6">
+                  <div className="bg-white border-2 border-slate-900 px-4 py-2 rounded-xl font-bold flex items-center gap-2">
+                    <Timer size={18} /> {((Date.now() - startTime)/1000).toFixed(0)}s
+                  </div>
+                  <div className="bg-indigo-600 text-white border-2 border-slate-900 px-4 py-2 rounded-xl font-bold">
+                    SOAL {progress + 1}/10
+                  </div>
+               </div>
+
+               <div className="bg-white border-4 border-slate-900 p-12 rounded-[2.5rem] shadow-[10px_10px_0px_0px_#0f172a] mb-8 min-h-[180px] flex items-center justify-center">
+                  <h2 className="text-4xl md:text-5xl font-black text-slate-900 text-center tracking-tight">{questions[progress].question}</h2>
+               </div>
+
+               <div className="grid grid-cols-1 gap-4">
+                  {questions[progress].options.map((opt: string, i: number) => (
+                    <button
+                      key={i}
+                      disabled={answerState !== 'idle'}
+                      onClick={() => handleAnswer(opt)}
+                      className={`p-6 rounded-2xl border-4 border-slate-900 font-black text-2xl text-left transition-all shadow-[6px_6px_0px_0px_#0f172a]
+                        ${answerState === 'correct' && opt === questions[progress].correctAnswer ? 'bg-emerald-500 text-white' : 
+                          answerState === 'wrong' && opt === questions[progress].correctAnswer ? 'bg-emerald-200 border-emerald-500' :
+                          'bg-white text-slate-900 hover:bg-indigo-50'}`}
+                    >
+                      {opt}
+                    </button>
                   ))}
                </div>
             </motion.div>
-        )}
-    </main>
-  );
-}
+          )}
 
-export default function SinglePlayerPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <Loader2 className="animate-spin text-indigo-600 w-16 h-16" />
+          {status === 'finished' && (
+            <motion.div 
+              key="finished"
+               initial={{ opacity: 0, scale: 0.9 }}
+               animate={{ opacity: 1, scale: 1 }}
+               className="bg-white border-4 border-slate-900 p-10 rounded-[2.5rem] shadow-[10px_10px_0px_0px_#0f172a] text-center"
+            >
+               <div className="w-20 h-20 bg-amber-400 rounded-full mx-auto mb-6 flex items-center justify-center border-4 border-slate-900 shadow-[6px_6px_0px_0px_#0f172a]">
+                  <Trophy className="text-white drop-shadow-[2px_2px_0px_#000]" size={40} />
+               </div>
+               <h2 className="text-4xl font-black text-slate-900 mb-2">LATIHAN SELESAI</h2>
+               <p className="text-slate-500 font-bold text-xl mb-10 tracking-widest uppercase">HASIL KAMU</p>
+               
+               <div className="grid grid-cols-2 gap-6 mb-12">
+                  <div className="bg-slate-50 p-6 rounded-3xl border-3 border-slate-900 h-full">
+                     <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Skor Akhir</p>
+                     <p className="text-5xl font-black text-indigo-600 leading-none">{score * 10}</p>
+                  </div>
+                  <div className="bg-slate-50 p-6 rounded-3xl border-3 border-slate-900 h-full">
+                     <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Waktu Total</p>
+                     <p className="text-4xl font-black text-slate-900 leading-none">{finishTime}</p>
+                  </div>
+               </div>
+
+               <div className="bg-amber-50 p-6 rounded-3xl border-4 border-amber-500 border-dashed mb-10">
+                  <p className="text-amber-600 font-black mb-2 flex items-center justify-center gap-2">
+                    <Coins /> KOIN DIDAPATKAN
+                  </p>
+                  <p className="text-4xl font-black text-slate-900">+{score * (tier === 'SD' ? 1 : tier === 'SMP' ? 2 : 3)}</p>
+                  <p className="text-[10px] font-black text-amber-600 mt-2">MULTIPLIKER TIER {tier}: x{tier === 'SD' ? 1 : tier === 'SMP' ? 2 : 3}</p>
+               </div>
+
+               <div className="flex flex-col gap-4">
+                  <button 
+                    onClick={startSoloGame}
+                    className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl border-4 border-slate-900 shadow-[8px_8px_0px_0px_#334155] hover:bg-slate-800 transition-all flex items-center justify-center gap-3"
+                  >
+                    COBA LAGI <Rocket />
+                  </button>
+                  <button 
+                    onClick={() => router.push('/')}
+                    className="w-full bg-white text-slate-900 font-black py-4 rounded-2xl border-4 border-slate-900 shadow-[8px_8px_0px_0px_#0f172a] hover:bg-slate-50 transition-all"
+                  >
+                    KEMBALI KE MENU
+                  </button>
+               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-    }>
-      <SinglePlayerContent />
-    </Suspense>
+    </main>
   );
 }
