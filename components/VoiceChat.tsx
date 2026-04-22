@@ -70,7 +70,7 @@ export default function VoiceChat({ roomCode }: { roomCode: string }) {
   }, [audioOn]);
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex gap-2">
+    <div className="fixed bottom-4 left-4 z-50 flex gap-2">
       <button
         onClick={() => setMicOn(!micOn)}
         className={`p-3 rounded-full ${micOn ? 'bg-blue-600' : 'bg-red-600'} text-white shadow-lg`}
