@@ -55,23 +55,12 @@ service cloud.firestore {
              data.questions is list &&
              (data.startTime == null || data.startTime is timestamp) &&
              (data.gameStartAtUnix == null || data.gameStartAtUnix is number) &&
-             validateRoomPlayer(data.players[0]); // Check at least first element structure
-    }
-
-    function isValidChat(data) {
-       return data.keys().hasAll(['text', 'senderId', 'senderName', 'createdAt']) &&
-              data.keys().size() == 4 &&
-              data.text is string && data.text.size() > 0 && data.text.size() <= 200 &&
-              data.senderId is string && data.senderId == request.auth.uid &&
-              data.senderName is string && data.senderName.size() > 0 &&
-              data.createdAt == request.time;
+             validateRoomPlayer(data.players[0]);
     }
 
     match /players/{playerId} {
       allow get: if isSignedIn() && isValidId(playerId) && request.auth.uid == playerId;
-      
       allow create: if isSignedIn() && isValidId(playerId) && request.auth.uid == playerId && isValidPlayer(incoming());
-      
       allow update: if isSignedIn() && isValidId(playerId) && request.auth.uid == playerId && isValidPlayer(incoming()) && (
         (incoming().diff(existing()).affectedKeys().hasOnly(['playerName', 'coins', 'updatedAt']) && incoming().uid == existing().uid)
       );
@@ -80,8 +69,6 @@ service cloud.firestore {
     match /rooms/{roomId} {
       allow get: if isSignedIn() && isRoomCode(roomId);
       allow list: if isSignedIn();
-      allow delete: if isSignedIn() && isRoomCode(roomId);
-
       allow create: if isSignedIn() && isRoomCode(roomId) && isValidRoom(incoming()) && 
                     incoming().hostId == request.auth.uid && 
                     incoming().status == 'waiting' &&
@@ -89,19 +76,14 @@ service cloud.firestore {
                     incoming().players[0].uid == request.auth.uid;
       
       allow update: if isSignedIn() && isRoomCode(roomId) && isValidRoom(incoming()) && (
-        // Action: Join Room or Player Leaves (Anyone can update players array regardless of status)
         (incoming().diff(existing()).affectedKeys().hasOnly(['players'])) ||
-        
-        // Action: Update status by any alive player or host when everyone finished
         (incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
-        
-        // Action: Start Game, update status, or Reset/Rematch (Host only)
         (request.auth.uid == existing().hostId && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'questions', 'startTime', 'gameStartAtUnix', 'players']))
       );
 
       match /messages/{messageId} {
         allow read: if isSignedIn();
-        allow create: if isSignedIn() && isValidChat(incoming());
+        allow create: if isSignedIn() && (messageId is string);
       }
     }
   }

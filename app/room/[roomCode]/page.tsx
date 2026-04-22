@@ -8,6 +8,7 @@ import { auth, db } from '../../../lib/firebase';
 import { doc, onSnapshot, updateDoc, serverTimestamp, runTransaction, increment, deleteDoc, collection, addDoc, query, orderBy } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { generateMathQuestions, MathQuestion } from '../../../lib/questionGenerator';
+import VoiceChat from '../../../components/VoiceChat';
 
 interface Player {
   uid: string;
@@ -586,6 +587,8 @@ export default function RoomPage() {
                 </p>
             </motion.div>
         )}
+        {/* Realtime Voice Chat Integration */}
+        <VoiceChat roomCode={roomCode} appId="0ce2dd48206541a39e21cec16f843e3e" />
       </main>
     )
   }
@@ -728,6 +731,9 @@ export default function RoomPage() {
               <Home size={24} /> Ke Beranda
            </button>
         </div>
+
+        {/* Realtime Voice Chat Integration */}
+        <VoiceChat roomCode={roomCode} appId="0ce2dd48206541a39e21cec16f843e3e" />
       </main>
     );
   }
@@ -953,6 +959,8 @@ export default function RoomPage() {
             )}
          </>
       )}
+      {/* Realtime Voice Chat Integration */}
+      <VoiceChat roomCode={roomCode} appId="0ce2dd48206541a39e21cec16f843e3e" />
     </main>
   );
 }
