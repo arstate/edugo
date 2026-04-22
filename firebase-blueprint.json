@@ -1,0 +1,22 @@
+{
+  "entities": {
+    "Player": {
+      "title": "Player",
+      "description": "A player in the game",
+      "type": "object",
+      "properties": {
+        "playerName": { "type": "string" },
+        "coins": { "type": "number" },
+        "uid": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["playerName", "coins", "uid", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/players/{playerId}": {
+      "schema": { "$ref": "#/entities/Player" },
+      "description": "Stores player profiles. The playerId is the anonymous Auth UID or LocalStorage UID."
+    }
+  }
+}

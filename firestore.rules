@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+
+    function isValidPlayer(data) {
+      return data.keys().hasAll(['playerName', 'coins', 'uid', 'updatedAt']) &&
+             data.keys().size() == 4 &&
+             data.playerName is string && data.playerName.size() > 0 && data.playerName.size() <= 30 &&
+             data.coins is number && data.coins >= 0 &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128 && data.uid == request.auth.uid &&
+             data.updatedAt == request.time;
+    }
+
+    match /players/{playerId} {
+      allow get: if isSignedIn() && isValidId(playerId) && request.auth.uid == playerId;
+      
+      allow create: if isSignedIn() && isValidId(playerId) && request.auth.uid == playerId && isValidPlayer(incoming());
+      
+      allow update: if isSignedIn() && isValidId(playerId) && request.auth.uid == playerId && isValidPlayer(incoming()) && (
+        (incoming().diff(existing()).affectedKeys().hasOnly(['playerName', 'coins', 'updatedAt']) && incoming().uid == existing().uid)
+      );
+    }
+  }
+}

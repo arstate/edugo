@@ -3,56 +3,94 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Gamepad2, Users, UserPlus, LogOut } from 'lucide-react';
+import { auth, db } from '../lib/firebase';
+import { signInAnonymously, signOut, onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
 export default function Home() {
   const [playerName, setPlayerName] = useState<string | null>(null);
   const [inputName, setInputName] = useState('');
   const [coins, setCoins] = useState<number>(0);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // Check localStorage on mount
-    const storedName = localStorage.getItem('playerName');
-    const storedCoins = localStorage.getItem('coins');
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // User is signed in, listen to their player document
+        const playerRef = doc(db, 'players', user.uid);
+        
+        const unsubscribeDoc = onSnapshot(playerRef, (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setPlayerName(data.playerName);
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setCoins(data.coins);
+          } else {
+            // Document doesn't exist, might be a stale anonymous auth session without player data
+            // We can just sign out to clear it
+            signOut(auth);
+          }
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setIsLoaded(true);
+        }, (err) => {
+          console.error("Firestore error:", err);
+          signOut(auth);
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setIsLoaded(true);
+        });
 
-    if (storedName) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPlayerName(storedName);
-    }
-    
-    if (storedCoins) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCoins(parseInt(storedCoins, 10));
-    } else {
-      localStorage.setItem('coins', '0');
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCoins(0);
-    }
-    
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsLoaded(true);
+        return () => unsubscribeDoc();
+      } else {
+        // No user signed in
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setPlayerName(null);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setCoins(0);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setIsLoaded(true);
+      }
+    });
+
+    return () => unsubscribeAuth();
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputName.trim()) return;
+    if (!inputName.trim() || isLoading) return;
 
+    setIsLoading(true);
     const newName = inputName.trim();
-    const newUid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    
-    localStorage.setItem('playerName', newName);
-    localStorage.setItem('uid', newUid);
-    localStorage.setItem('coins', '0');
-    
-    setPlayerName(newName);
-    setCoins(0);
+
+    try {
+      // Create Anonymous Auth Account
+      const userCredential = await signInAnonymously(auth);
+      const uid = userCredential.user.uid;
+      
+      // Save Player data to Firestore
+      await setDoc(doc(db, 'players', uid), {
+        playerName: newName,
+        coins: 0,
+        uid: uid,
+        updatedAt: serverTimestamp()
+      });
+      
+      // onSnapshot will handle setting local state automatically
+    } catch (error) {
+      console.error("Error signing in or saving data:", error);
+      alert("Uh oh! Pastikan Anonymous Sign-In sudah diaktifkan di Firebase Console.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('playerName');
-    localStorage.removeItem('uid');
-    setPlayerName(null);
-    setInputName('');
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Error logging out:", error);
+    }
   };
 
   // Ensure content doesn't render mismatched initial server HTML by waiting for client-side load
@@ -89,12 +127,13 @@ export default function Home() {
               />
             </div>
             <motion.button
-              whileHover={{ x: -2, y: -2, boxShadow: "10px 10px 0px 0px #0f172a" }}
-              whileTap={{ scale: 0.98, x: 4, y: 4, boxShadow: "4px 4px 0px 0px #0f172a" }}
+              whileHover={isLoading ? {} : { x: -2, y: -2, boxShadow: "10px 10px 0px 0px #0f172a" }}
+              whileTap={isLoading ? {} : { scale: 0.98, x: 4, y: 4, boxShadow: "4px 4px 0px 0px #0f172a" }}
               type="submit"
-              className="w-full py-4 rounded-xl bg-indigo-600 border-4 border-slate-900 text-white font-black text-xl shadow-[8px_8px_0px_0px_#0f172a] uppercase tracking-wider transition-all"
+              disabled={isLoading}
+              className={`w-full py-4 rounded-xl border-4 border-slate-900 text-white font-black text-xl shadow-[8px_8px_0px_0px_#0f172a] uppercase tracking-wider transition-all ${isLoading ? 'bg-slate-500 cursor-not-allowed opacity-80' : 'bg-indigo-600'}`}
             >
-              Gas Main
+              {isLoading ? "Menghubungkan..." : "Gas Main"}
             </motion.button>
           </form>
         </motion.div>
