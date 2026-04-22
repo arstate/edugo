@@ -6,15 +6,17 @@ import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 
 const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID;
 
-export default function VoiceChat({ roomCode }: { roomCode: string }) {
+export default function VoiceChat({ roomCode, isReady }: { roomCode: string, isReady: boolean }) {
   const [micOn, setMicOn] = useState(true);
   const [audioOn, setAudioOn] = useState(true);
   const client = useRef<IAgoraRTCClient | null>(null);
   const localAudioTrack = useRef<IMicrophoneAudioTrack | null>(null);
   const remoteTracks = useRef<Map<string, IRemoteAudioTrack>>(new Map());
+  const initialized = useRef(false);
 
   useEffect(() => {
-    if (!APP_ID) return;
+    if (!isReady || initialized.current || !APP_ID) return;
+    initialized.current = true;
 
     const initAgora = async () => {
       client.current = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
@@ -53,7 +55,7 @@ export default function VoiceChat({ roomCode }: { roomCode: string }) {
       }
       remoteTracks.current.forEach(track => track.stop());
     };
-  }, [roomCode]);
+  }, [roomCode, isReady]);
 
   useEffect(() => {
     if (localAudioTrack.current) {
