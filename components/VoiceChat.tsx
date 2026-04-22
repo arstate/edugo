@@ -1,115 +1,152 @@
-'use client';
+"use client";
 
 import { useState, useEffect, useRef } from 'react';
-import AgoraRTC, { IAgoraRTCClient, IMicrophoneAudioTrack } from 'agora-rtc-sdk-ng';
-import { Mic, MicOff, Volume2, VolumeX, PhoneIncoming, Loader2 } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, PhoneCall, Loader2 } from 'lucide-react';
+import type { IAgoraRTCClient, IMicrophoneAudioTrack } from 'agora-rtc-sdk-ng';
 
-const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID;
+interface VoiceChatProps {
+  roomCode: string;
+  appId: string;
+}
 
-export default function VoiceChat({ roomCode }: { roomCode: string }) {
+export default function VoiceChat({ roomCode, appId }: VoiceChatProps) {
   const [isJoined, setIsJoined] = useState(false);
-  const [isMicMuted, setIsMicMuted] = useState(false);
-  const [isSpeakerOff, setIsSpeakerOff] = useState(false);
-  const [isJoining, setIsJoining] = useState(false);
-  
+  const [isMicOn, setIsMicOn] = useState(true);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+
   const client = useRef<IAgoraRTCClient | null>(null);
   const localAudioTrack = useRef<IMicrophoneAudioTrack | null>(null);
 
-  const joinVoiceChat = async () => {
-    if (!APP_ID || isJoining || isJoined) return;
-    setIsJoining(true);
-
+  const joinVoice = async () => {
+    if (!appId || !roomCode) {
+      console.error("App ID or Room Code missing");
+      return;
+    }
+    
+    setIsLoading(true);
     try {
+      const AgoraRTC = (await import('agora-rtc-sdk-ng')).default;
+      
       client.current = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
 
+      // Event Listeners
       client.current.on("user-published", async (user, mediaType) => {
         await client.current!.subscribe(user, mediaType);
-        if (mediaType === "audio" && user.audioTrack) {
-          user.audioTrack.play();
+        if (mediaType === "audio") {
+          user.audioTrack?.play();
         }
       });
 
-      await client.current.join(APP_ID, roomCode, null, null);
-      
+      client.current.on("user-unpublished", (user, mediaType) => {
+        if (mediaType === "audio" && user.audioTrack) {
+          user.audioTrack.stop();
+        }
+      });
+
+      // Join Channel
+      await client.current.join(appId, roomCode, null, null);
+
+      // Mic Permissions & Publish
       localAudioTrack.current = await AgoraRTC.createMicrophoneAudioTrack();
       await client.current.publish([localAudioTrack.current]);
-      
+
       setIsJoined(true);
-    } catch (err) {
-       console.error("Agora join error:", err);
-       alert("Gagal bergabung ke voice chat. Silakan periksa izin mikrofon Anda.");
+    } catch (error) {
+      console.error("Error joining voice chat:", error);
     } finally {
-       setIsJoining(false);
+      setIsLoading(false);
     }
   };
 
-  const toggleMic = () => {
-    if (localAudioTrack.current) {
-      const nextMuted = !isMicMuted;
-      localAudioTrack.current.setMuted(nextMuted);
-      setIsMicMuted(nextMuted);
-    }
+  const toggleMic = async () => {
+    if (!localAudioTrack.current) return;
+    const newMuteState = !isMicOn;
+    await localAudioTrack.current.setMuted(newMuteState);
+    setIsMicOn(!newMuteState);
   };
 
   const toggleSpeaker = () => {
     if (!client.current) return;
+    const newSpeakerState = !isSpeakerOn;
     
-    const muted = !isSpeakerOff;
     client.current.remoteUsers.forEach(user => {
       if (user.audioTrack) {
-        if (muted) {
-          user.audioTrack.stop();
-        } else {
-          user.audioTrack.play();
-        }
+        user.audioTrack.setVolume(newSpeakerState ? 100 : 0);
       }
     });
-    setIsSpeakerOff(muted);
+    setIsSpeakerOn(newSpeakerState);
+  };
+
+  const leaveVoice = async () => {
+    if (localAudioTrack.current) {
+      localAudioTrack.current.stop();
+      localAudioTrack.current.close();
+      localAudioTrack.current = null;
+    }
+    if (client.current) {
+      await client.current.leave();
+      client.current = null;
+    }
+    setIsJoined(false);
   };
 
   useEffect(() => {
     return () => {
-      if (localAudioTrack.current) {
-        localAudioTrack.current.stop();
-        localAudioTrack.current.close();
-      }
-      if (client.current) {
-        client.current.leave();
-      }
+      leaveVoice();
     };
   }, []);
 
   return (
-    <>
+    <div className="fixed bottom-4 right-4 z-[100] flex gap-2 flex-col items-end">
       {!isJoined ? (
         <button
-          onClick={joinVoiceChat}
-          disabled={isJoining}
-          className="fixed bottom-32 left-1/2 -translate-x-1/2 z-[999] flex items-center gap-3 px-8 py-5 bg-emerald-500 text-white font-black uppercase tracking-widest rounded-full border-4 border-slate-900 shadow-[8px_8px_0px_0px_#0f172a] hover:bg-emerald-400 transition-all active:translate-x-[4px] active:translate-y-[4px] active:shadow-none whitespace-nowrap disabled:opacity-75 disabled:cursor-wait"
+          onClick={joinVoice}
+          disabled={isLoading}
+          className="flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-full shadow-[4px_4px_0px_0px_#0f172a] border-2 border-slate-900 transition-all active:translate-x-1 active:translate-y-1 active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed group"
         >
-          {isJoining ? (
-            <Loader2 className="animate-spin" size={28} />
+          {isLoading ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
           ) : (
-            <PhoneIncoming size={28} />
+            <PhoneCall className="w-5 h-5 group-hover:scale-110 transition-transform" />
           )}
-          {isJoining ? 'Menghubungkan...' : 'Gabung Voice Chat'}
+          <span className="uppercase tracking-tight text-sm">
+            {isLoading ? "Menghubungkan..." : "Gabung Voice"}
+          </span>
         </button>
       ) : (
-        <div className="fixed bottom-4 left-4 z-[999] flex gap-3">
+        <div className="flex gap-2">
+          {/* Mic Toggle */}
           <button
             onClick={toggleMic}
-            className={`p-5 rounded-full ${!isMicMuted ? 'bg-blue-600' : 'bg-red-600'} text-white shadow-[6px_6px_0px_0px_#0f172a] border-4 border-slate-900 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all`}
+            className={`w-12 h-12 flex items-center justify-center rounded-full border-2 border-slate-900 shadow-[4px_4px_0px_0px_#0f172a] transition-all active:translate-x-1 active:translate-y-1 active:shadow-none ${
+              isMicOn ? 'bg-white text-slate-900' : 'bg-rose-500 text-white'
+            }`}
+            title={isMicOn ? "Matikan Mic" : "Nyalakan Mic"}
           >
-            {!isMicMuted ? <Mic size={28} /> : <MicOff size={28} />}
+            {isMicOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
           </button>
+
+          {/* Speaker Toggle */}
           <button
             onClick={toggleSpeaker}
-            className={`p-5 rounded-full ${!isSpeakerOff ? 'bg-blue-600' : 'bg-red-600'} text-white shadow-[6px_6px_0px_0px_#0f172a] border-4 border-slate-900 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all`}
+            className={`w-12 h-12 flex items-center justify-center rounded-full border-2 border-slate-900 shadow-[4px_4px_0px_0px_#0f172a] transition-all active:translate-x-1 active:translate-y-1 active:shadow-none ${
+              isSpeakerOn ? 'bg-white text-slate-900' : 'bg-rose-500 text-white'
+            }`}
+            title={isSpeakerOn ? "Matikan Suara" : "Nyalakan Suara"}
           >
-            {!isSpeakerOff ? <Volume2 size={28} /> : <VolumeX size={28} />}
+            {isSpeakerOn ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+          </button>
+          
+          {/* Leave Button */}
+          <button
+            onClick={leaveVoice}
+            className="px-4 bg-slate-900 text-white font-black text-[10px] uppercase rounded-full border-2 border-slate-900 shadow-[4px_4px_0px_0px_#475569] transition-all hover:bg-slate-800"
+          >
+            Keluar
           </button>
         </div>
       )}
-    </>
+    </div>
   );
 }

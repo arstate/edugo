@@ -1,16 +1,19 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'motion/react';
-import { Users, Play, LogOut, Loader2, Copy, Crown, Medal, Award, Coins, Home, MessageSquare, X, Send, RotateCcw, Mic } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { motion } from 'motion/react';
+import { Users, Play, LogOut, Loader2, Copy, Crown, Medal, Award, Coins, Home, MessageSquare, X, Send, RotateCcw } from 'lucide-react';
 import { auth, db } from '../../../lib/firebase';
 import { doc, onSnapshot, updateDoc, serverTimestamp, runTransaction, increment, deleteDoc, collection, addDoc, query, orderBy } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { generateMathQuestions, MathQuestion } from '../../../lib/questionGenerator';
 
-const VoiceChat = dynamic(() => import('../../../components/VoiceChat'), { ssr: false });
+const VoiceChat = dynamic(() => import('../../../components/VoiceChat'), { 
+  ssr: false,
+  loading: () => null
+});
 
 interface Player {
   uid: string;
@@ -61,8 +64,6 @@ export default function RoomPage() {
   // Chat variables
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [showVoiceModal, setShowVoiceModal] = useState(true);
-  const [isVoiceChatEnabled, setIsVoiceChatEnabled] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [seenMessagesCount, setSeenMessagesCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -476,30 +477,6 @@ export default function RoomPage() {
 
     return (
       <main className="min-h-screen flex flex-col items-center py-8 md:py-12 px-4 lg:px-8 bg-slate-50 overflow-x-hidden">
-        {/* Permission Modal */}
-        <AnimatePresence>
-          {showVoiceModal && (
-            <motion.div 
-              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            >
-              <motion.div className="bg-white p-8 rounded-[32px] border-4 border-slate-900 shadow-[8px_8px_0px_0px_#0f172a] text-center max-w-sm" initial={{ scale: 0.9 }} animate={{ scale: 1 }}>
-                <Mic className="w-16 h-16 mx-auto mb-4 text-indigo-600" />
-                <h3 className="text-xl font-black uppercase tracking-widest mb-4">Voice Chat</h3>
-                <p className="text-slate-600 font-bold mb-6">Klik OK untuk bergabung ke Voice Chat dan masuk ke Room.</p>
-                <button 
-                  onClick={() => { setShowVoiceModal(false); setIsVoiceChatEnabled(true); }}
-                  className="w-full py-4 bg-indigo-600 border-4 border-slate-900 rounded-xl text-white font-black uppercase tracking-widest hover:bg-indigo-500 transition-all"
-                >
-                  OK
-                </button>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {isVoiceChatEnabled && <VoiceChat roomCode={roomCode} />}
-
         {/* Countdown Overlay during 'playing' */ }
         {countdownTimer !== null && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/90 backdrop-blur-sm">
@@ -763,30 +740,6 @@ export default function RoomPage() {
 
   return (
     <main className="min-h-screen flex flex-col items-center py-8 md:py-12 px-4 lg:px-8">
-      {/* Permission Modal */}
-      <AnimatePresence>
-        {showVoiceModal && (
-          <motion.div 
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          >
-            <motion.div className="bg-white p-8 rounded-[32px] border-4 border-slate-900 shadow-[8px_8px_0px_0px_#0f172a] text-center max-w-sm" initial={{ scale: 0.9 }} animate={{ scale: 1 }}>
-              <Mic className="w-16 h-16 mx-auto mb-4 text-indigo-600" />
-              <h3 className="text-xl font-black uppercase tracking-widest mb-4">Voice Chat</h3>
-              <p className="text-slate-600 font-bold mb-6">Klik OK untuk bergabung ke Voice Chat dan masuk ke Room.</p>
-              <button 
-                onClick={() => { setShowVoiceModal(false); setIsVoiceChatEnabled(true); }}
-                className="w-full py-4 bg-indigo-600 border-4 border-slate-900 rounded-xl text-white font-black uppercase tracking-widest hover:bg-indigo-500 transition-all"
-              >
-                OK
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {isVoiceChatEnabled && <VoiceChat roomCode={roomCode} />}
-
       {/* Header Bar */}
       <header className="w-full max-w-5xl flex justify-between items-center mb-8 md:mb-12 gap-2">
         <button 
@@ -1006,6 +959,12 @@ export default function RoomPage() {
             )}
          </>
       )}
+
+      {/* Voice Chat Component */}
+      <VoiceChat 
+        roomCode={roomCode} 
+        appId={"0ce2dd48206541a39e21cec16f843e3e"} 
+      />
     </main>
   );
 }
