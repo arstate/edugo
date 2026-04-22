@@ -9,15 +9,15 @@ const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max 
 const generateWrongOptions = (correct: number): number[] => {
   const opts = new Set<number>();
   while (opts.size < 3) {
-    // Offset randomly between -10 to +10, except 0
-    const offset = randomInt(-10, 10);
+    // For smaller numbers, use smaller offsets
+    const scale = Math.abs(correct) < 20 ? 5 : (Math.abs(correct) < 100 ? 15 : 30);
+    const offset = randomInt(-scale, scale);
     if (offset === 0) continue;
     const wrong = correct + offset;
     
     // Attempt to avoid negative options if correct answer is positive, 
-    // to keep it simple for kids, mostly
-    if (correct >= 0 && wrong < 0) continue; 
-    
+    // unless the level is high (SMP/SMA)
+    // We'll let SMP/SMA have negative options
     opts.add(wrong);
   }
   return Array.from(opts);
@@ -72,15 +72,14 @@ export const generateMathQuestions = (kelas: number, jumlahSoal: number): MathQu
         qStr = `${a} x ${b}`;
         ans = a * b;
       } else {
-        // Pembagian dasar: hasil bulat
         const b = randomInt(2, 10);
         const ansCandidate = randomInt(2, 12);
         const a = b * ansCandidate;
         qStr = `${a} ÷ ${b}`;
         ans = ansCandidate;
       }
-    } else {
-      // Kelas 5-6: Operasi campuran, angka lebih besar
+    } else if (kelas <= 6) {
+      // Kelas 5-6: SD Lanjut
       const op = Math.floor(Math.random() * 4);
       
       if (op === 0) {
@@ -104,6 +103,80 @@ export const generateMathQuestions = (kelas: number, jumlahSoal: number): MathQu
         const a = b * ansCandidate;
         qStr = `${a} ÷ ${b}`;
         ans = ansCandidate;
+      }
+    } else if (kelas <= 9) {
+      // SMP (Kelas 7-9)
+      const op = Math.floor(Math.random() * 3); // 0: Aljabar, 1: Persentase, 2: Diskon
+
+      if (op === 0) {
+        // Aljabar: ax + b = c
+        const a = randomInt(2, 6);
+        const x = randomInt(2, 10);
+        const b = randomInt(1, 20);
+        const c = a * x + b;
+        qStr = `Jika ${a}x + ${b} = ${c}, berapakah nilai x?`;
+        ans = x;
+      } else if (op === 1) {
+        // Persentase: x% dari y
+        const percentages = [10, 20, 25, 30, 40, 50, 60, 75];
+        const p = percentages[Math.floor(Math.random() * percentages.length)];
+        const base = randomInt(1, 20) * 50;
+        qStr = `Berapakah ${p}% dari ${base}?`;
+        ans = (p / 100) * base;
+      } else {
+        // Diskon
+        const prices = [50000, 100000, 150000, 200000, 250000, 500000];
+        const price = prices[Math.floor(Math.random() * prices.length)];
+        const discount = randomInt(1, 9) * 10;
+        qStr = `Harga barang Rp ${price.toLocaleString('id-ID')} diskon ${discount}%. Berapa harga setelah diskon?`;
+        ans = price - (price * (discount / 100));
+      }
+    } else {
+      // SMA/SMK (Kelas 10-12)
+      const op = Math.floor(Math.random() * 3); // 0: Barisan, 1: Eksponen, 2: Persamaan Kuadrat
+
+      if (op === 0) {
+        // Barisan Aritmatika: Un = a + (n-1)d
+        const a = randomInt(1, 10);
+        const d = randomInt(2, 6);
+        const n = randomInt(5, 12);
+        qStr = `Suku ke-${n} dari barisan ${a}, ${a+d}, ${a+2*d}... adalah?`;
+        ans = a + (n - 1) * d;
+      } else if (op === 1) {
+        // Eksponen: n^a * n^b = n^(a+b)
+        const baseChoices = [2, 3];
+        const base = baseChoices[Math.floor(Math.random() * baseChoices.length)];
+        const p1 = randomInt(2, 4);
+        const p2 = randomInt(2, 3);
+        const resultPower = p1 + p2;
+        qStr = `Nilai dari ${base} pangkat ${p1} x ${base} pangkat ${p2} adalah?`;
+        ans = Math.pow(base, resultPower);
+      } else {
+        // Persamaan Kuadrat: x^2 - Sx + P = 0
+        // Hasil kali akar = c/a, penjumlahan akar = -b/a
+        let x1 = randomInt(-5, 5);
+        let x2 = randomInt(-5, 5);
+        if (x1 === 0 && x2 === 0) x1 = 1;
+        
+        const S = x1 + x2;
+        const P = x1 * x2;
+        
+        const type = Math.random() > 0.5;
+        // x^2 - Sx + P = 0
+        // b = -S, c = P
+        const b = -S;
+        const c = P;
+        
+        const bStr = b === 0 ? "" : (b > 0 ? ` + ${b}x` : ` - ${Math.abs(b)}x`);
+        const cStr = c === 0 ? "" : (c > 0 ? ` + ${c}` : ` - ${Math.abs(c)}`);
+        
+        if (type) {
+          qStr = `Jika persamaan x²${bStr}${cStr} = 0, berapakah hasil kali akar-akarnya?`;
+          ans = P;
+        } else {
+          qStr = `Jika persamaan x²${bStr}${cStr} = 0, berapakah penjumlahan akar-akarnya?`;
+          ans = S;
+        }
       }
     }
 

@@ -21,6 +21,7 @@ export default function Home() {
   const [showJoinModal, setShowJoinModal] = useState(false);
   
   // Room form states
+  const [formTier, setFormTier] = useState<'SD' | 'SMP' | 'SMA'>('SD');
   const [formKelas, setFormKelas] = useState(3);
   const [formJumlahSoal, setFormJumlahSoal] = useState(10);
   const [joinCode, setJoinCode] = useState('');
@@ -107,12 +108,16 @@ export default function Home() {
 
   // Single Player Variables
   const [showSinglePlayerModal, setShowSinglePlayerModal] = useState(false);
+  const [singleTier, setSingleTier] = useState<'SD' | 'SMP' | 'SMA'>('SD');
   const [singleKelas, setSingleKelas] = useState(1);
   const [singleJumlahSoal, setSingleJumlahSoal] = useState(10);
 
   const handleStartSinglePlayer = (e: React.FormEvent) => {
      e.preventDefault();
-     router.push(`/singleplayer?kelas=${singleKelas}&jumlahSoal=${singleJumlahSoal}`);
+     let finalKelas = singleKelas;
+     if (singleTier === 'SMP') finalKelas = 7;
+     if (singleTier === 'SMA') finalKelas = 10;
+     router.push(`/singleplayer?kelas=${finalKelas}&jumlahSoal=${singleJumlahSoal}`);
   };
 
   const handleCreateRoom = async (e: React.FormEvent) => {
@@ -138,13 +143,17 @@ export default function Home() {
       isReady: false
     };
 
+    let finalKelas = formKelas;
+    if (formTier === 'SMP') finalKelas = 7;
+    if (formTier === 'SMA') finalKelas = 10;
+
     try {
       await setDoc(roomRef, {
         roomCode: code,
         hostId: uid,
         status: 'waiting',
         settings: {
-          kelas: formKelas,
+          kelas: finalKelas,
           jumlahSoal: formJumlahSoal
         },
         players: [hostPlayer],
@@ -404,17 +413,32 @@ export default function Home() {
 
                <form onSubmit={handleStartSinglePlayer} className="space-y-6">
                  <div>
-                   <label className="block text-[11px] font-black tracking-widest uppercase text-slate-500 mb-2">Pilih Kelas</label>
+                   <label className="block text-[11px] font-black tracking-widest uppercase text-slate-500 mb-2">Pilih Tingkat</label>
                    <select 
-                     value={singleKelas} 
-                     onChange={(e) => setSingleKelas(Number(e.target.value))}
+                     value={singleTier} 
+                     onChange={(e) => setSingleTier(e.target.value as 'SD' | 'SMP' | 'SMA')}
                      className="w-full px-5 py-4 rounded-xl border-4 border-slate-900 bg-white focus:outline-none focus:ring-4 focus:ring-emerald-500/20 text-lg font-black text-slate-900 uppercase tracking-wide appearance-none cursor-pointer"
                    >
-                     {[1, 2, 3, 4, 5, 6].map(k => (
-                       <option key={k} value={k}>Kelas {k} SD</option>
-                     ))}
+                     <option value="SD">SD (Tingkat Dasar)</option>
+                     <option value="SMP">SMP (Kelas 7-9)</option>
+                     <option value="SMA">SMA/SMK (Kelas 10-12)</option>
                    </select>
                  </div>
+
+                 {singleTier === 'SD' && (
+                   <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+                     <label className="block text-[11px] font-black tracking-widest uppercase text-slate-500 mb-2">Pilih Kelas SD</label>
+                     <select 
+                       value={singleKelas} 
+                       onChange={(e) => setSingleKelas(Number(e.target.value))}
+                       className="w-full px-5 py-4 rounded-xl border-4 border-slate-900 bg-white focus:outline-none focus:ring-4 focus:ring-emerald-500/20 text-lg font-black text-slate-900 uppercase tracking-wide appearance-none cursor-pointer"
+                     >
+                       {[1, 2, 3, 4, 5, 6].map(k => (
+                         <option key={k} value={k}>Kelas {k} SD</option>
+                       ))}
+                     </select>
+                   </motion.div>
+                 )}
                  
                  <div>
                    <label className="block text-[11px] font-black tracking-widest uppercase text-slate-500 mb-2">Jumlah Soal</label>
@@ -467,17 +491,32 @@ export default function Home() {
               
               <form onSubmit={handleCreateRoom} className="space-y-6">
                 <div>
-                  <label className="block text-[11px] font-black tracking-widest uppercase text-slate-500 mb-2">Pilih Kelas</label>
+                  <label className="block text-[11px] font-black tracking-widest uppercase text-slate-500 mb-2">Pilih Tingkat</label>
                   <select 
-                    value={formKelas} 
-                    onChange={(e) => setFormKelas(Number(e.target.value))}
+                    value={formTier} 
+                    onChange={(e) => setFormTier(e.target.value as 'SD' | 'SMP' | 'SMA')}
                     className="w-full px-5 py-4 rounded-xl border-4 border-slate-900 bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/20 text-lg font-black text-slate-900 uppercase tracking-wide appearance-none cursor-pointer"
                   >
-                    {[1, 2, 3, 4, 5, 6].map(kelas => (
-                      <option key={kelas} value={kelas}>Kelas {kelas} SD</option>
-                    ))}
+                    <option value="SD">SD (Tingkat Dasar)</option>
+                    <option value="SMP">SMP (Kelas 7-9)</option>
+                    <option value="SMA">SMA/SMK (Kelas 10-12)</option>
                   </select>
                 </div>
+
+                {formTier === 'SD' && (
+                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+                    <label className="block text-[11px] font-black tracking-widest uppercase text-slate-500 mb-2">Pilih Kelas SD</label>
+                    <select 
+                      value={formKelas} 
+                      onChange={(e) => setFormKelas(Number(e.target.value))}
+                      className="w-full px-5 py-4 rounded-xl border-4 border-slate-900 bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/20 text-lg font-black text-slate-900 uppercase tracking-wide appearance-none cursor-pointer"
+                    >
+                      {[1, 2, 3, 4, 5, 6].map(kelas => (
+                        <option key={kelas} value={kelas}>Kelas {kelas} SD</option>
+                      ))}
+                    </select>
+                  </motion.div>
+                )}
                 
                 <div>
                   <label className="block text-[11px] font-black tracking-widest uppercase text-slate-500 mb-2">Jumlah Soal</label>

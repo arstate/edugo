@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
-import { Users, Play, LogOut, Loader2, Copy, Crown, Medal, Award, Coins, Home, MessageSquare, X, Send } from 'lucide-react';
+import { Users, Play, LogOut, Loader2, Copy, Crown, Medal, Award, Coins, Home, MessageSquare, X, Send, RotateCcw } from 'lucide-react';
 import { auth, db } from '../../../lib/firebase';
 import { doc, onSnapshot, updateDoc, serverTimestamp, runTransaction, increment, deleteDoc, collection, addDoc, query, orderBy } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -259,7 +259,11 @@ export default function RoomPage() {
 
       if (myPlayerData && earnedCoins === null) {
         const correctAnswersCount = Math.round((myPlayerData.score / 100) * roomData.settings.jumlahSoal);
-        const multiplier = 1 + ((roomData.settings.kelas - 1) * 0.2);
+        
+        let multiplier = 1 + ((roomData.settings.kelas - 1) * 0.2);
+        if (roomData.settings.kelas >= 7 && roomData.settings.kelas <= 9) multiplier = 3;
+        if (roomData.settings.kelas >= 10) multiplier = 5;
+
         const baseCoin = Math.round(correctAnswersCount * 5 * multiplier);
         const bonus = myRank === 1 ? 500 : myRank === 2 ? 200 : myRank === 3 ? 100 : 0;
         const totalReward = baseCoin + bonus;
@@ -377,6 +381,34 @@ export default function RoomPage() {
     } catch (error) {
         console.error("Transaction failed: ", error);
         alert("Gagal mengirim jawaban, coba lagi.");
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
+
+  const handleReturnToLobby = async () => {
+    if (!roomCode || !roomData || isSubmitting) return;
+    setIsSubmitting(true);
+    
+    try {
+        const roomRef = doc(db, 'rooms', roomCode);
+        await updateDoc(roomRef, {
+            status: 'waiting',
+            questions: null,
+            startTime: null,
+            gameStartAtUnix: null,
+            players: roomData.players.map(p => ({
+                ...p,
+                progress: 0,
+                isReady: false,
+                isFinished: false,
+                score: 0,
+                finishTime: ""
+            }))
+        });
+    } catch (error) {
+        console.error("Error returning to lobby:", error);
+        alert("Gagal kembali ke lobby.");
     } finally {
         setIsSubmitting(false);
     }
@@ -663,17 +695,39 @@ export default function RoomPage() {
                      <Coins size={48} className="text-amber-500 drop-shadow-sm" />
                      <span className="text-5xl md:text-7xl font-black text-slate-900 tracking-tighter">+{earnedCoins}</span>
                   </div>
-                  <p className="text-xs font-black uppercase text-amber-600 mt-2 tracking-widest">Koin ditambahkan ke profil</p>
+                  <div className="mt-2 flex flex-col items-center">
+                    <p className="text-xs font-black uppercase text-amber-600 tracking-widest">Koin ditambahkan ke profil</p>
+                    {roomData.settings.kelas >= 7 && (
+                      <span className="mt-1 inline-block px-3 py-1 bg-amber-500 text-white rounded-lg text-xs font-black uppercase tracking-[0.1em] animate-bounce">
+                        Bonus Kesulitan: {roomData.settings.kelas >= 10 ? '5x' : '3x'}
+                      </span>
+                    )}
+                    {roomData.settings.kelas < 7 && roomData.settings.kelas > 1 && (
+                       <span className="mt-1 text-[10px] font-black uppercase text-amber-500 opacity-60">
+                        Multiplier SD: {(1 + (roomData.settings.kelas - 1) * 0.2).toFixed(1)}x
+                       </span>
+                    )}
+                  </div>
                </div>
             </motion.div>
         )}
 
-        <button 
-           onClick={() => router.push('/')}
-           className="px-8 py-5 bg-slate-900 border-4 border-slate-900 rounded-2xl text-white font-black text-xl uppercase tracking-widest shadow-[6px_6px_0px_0px_#0f172a] hover:translate-x-1 hover:translate-y-1 hover:shadow-none hover:bg-slate-800 transition-all flex items-center gap-3 mb-12"
-        >
-           <Home size={24} /> Ke Beranda
-        </button>
+        <div className="flex flex-col sm:flex-row gap-4 mb-12 w-full max-w-xl">
+           <button 
+              onClick={handleReturnToLobby}
+              disabled={isSubmitting}
+              className="flex-1 px-8 py-5 bg-indigo-600 border-4 border-slate-900 rounded-2xl text-white font-black text-lg md:text-xl uppercase tracking-widest shadow-[6px_6px_0px_0px_#0f172a] hover:translate-x-1 hover:translate-y-1 hover:shadow-none hover:bg-indigo-500 transition-all flex items-center justify-center gap-3 disabled:bg-slate-400 disabled:shadow-none disabled:translate-y-1 disabled:translate-x-1"
+           >
+              <RotateCcw size={24} strokeWidth={3} /> {isSubmitting ? 'MEMPROSES...' : 'REMATCH / LOBBY'}
+           </button>
+
+           <button 
+              onClick={() => router.push('/')}
+              className="flex-1 px-8 py-5 bg-slate-900 border-4 border-slate-900 rounded-2xl text-white font-black text-lg md:text-xl uppercase tracking-widest shadow-[6px_6px_0px_0px_#0f172a] hover:translate-x-1 hover:translate-y-1 hover:shadow-none hover:bg-slate-800 transition-all flex items-center justify-center gap-3"
+           >
+              <Home size={24} /> Ke Beranda
+           </button>
+        </div>
       </main>
     );
   }

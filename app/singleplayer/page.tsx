@@ -93,9 +93,12 @@ function SinglePlayerContent() {
          
          // Compute coins
          const baseReward = questions.length * 5;
-         const multiplier = kelasParam > 3 ? 2 : 1;
+         let multiplier = 1 + (Math.max(0, (kelasParam - 1)) * 0.2);
+         if (kelasParam >= 7 && kelasParam <= 9) multiplier = 3;
+         if (kelasParam >= 10) multiplier = 5;
+         
          const rankBonus = finalScore >= 90 ? 200 : (finalScore >= 60 ? 50 : 0);
-         const totalCoins = (baseReward * multiplier) + rankBonus;
+         const totalCoins = Math.round(baseReward * multiplier) + rankBonus;
          
          setEarnedCoins(totalCoins);
 
@@ -145,7 +148,19 @@ function SinglePlayerContent() {
                      <Coins size={48} className="text-amber-500 drop-shadow-sm" />
                      <span className="text-5xl md:text-7xl font-black text-slate-900 tracking-tighter">+{earnedCoins}</span>
                   </div>
-                  <p className="text-xs font-black uppercase text-amber-600 mt-2 tracking-widest">Koin ditambahkan ke profil</p>
+                  <div className="mt-2 flex flex-col items-center">
+                    <p className="text-xs font-black uppercase text-amber-600 tracking-widest">Koin ditambahkan ke profil</p>
+                    {kelasParam >= 7 && (
+                      <span className="mt-1 inline-block px-3 py-1 bg-amber-500 text-white rounded-lg text-xs font-black uppercase tracking-[0.1em] animate-bounce">
+                        Bonus Kesulitan: {kelasParam >= 10 ? '5x' : '3x'}
+                      </span>
+                    )}
+                    {kelasParam < 7 && kelasParam > 1 && (
+                       <span className="mt-1 text-[10px] font-black uppercase text-amber-500 opacity-60">
+                        Multiplier SD: {(1 + (kelasParam - 1) * 0.2).toFixed(1)}x
+                       </span>
+                    )}
+                  </div>
                </div>
             </motion.div>
         )}
