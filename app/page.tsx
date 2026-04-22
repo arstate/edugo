@@ -105,6 +105,16 @@ export default function Home() {
     }
   };
 
+  // Single Player Variables
+  const [showSinglePlayerModal, setShowSinglePlayerModal] = useState(false);
+  const [singleKelas, setSingleKelas] = useState(1);
+  const [singleJumlahSoal, setSingleJumlahSoal] = useState(10);
+
+  const handleStartSinglePlayer = (e: React.FormEvent) => {
+     e.preventDefault();
+     router.push(`/singleplayer?kelas=${singleKelas}&jumlahSoal=${singleJumlahSoal}`);
+  };
+
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isConnecting || !auth.currentUser || !playerName) return;
@@ -318,7 +328,7 @@ export default function Home() {
               icon="🕹️"
               title={<>Single<br className="hidden md:block" /> Player</>}
               subtitle="Latihan Mandiri"
-              onClick={() => console.log('Klik: Single Player')}
+              onClick={() => setShowSinglePlayerModal(true)}
               delay={0.1}
               hoverClass="hover:bg-emerald-50"
               iconClass="bg-emerald-100"
@@ -370,6 +380,69 @@ export default function Home() {
 
       {/* Modals */}
       <AnimatePresence>
+        {showSinglePlayerModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+             <motion.div 
+               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+               className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+               onClick={() => setShowSinglePlayerModal(false)}
+             />
+             <motion.div 
+               initial={{ scale: 0.9, opacity: 0, y: 20 }}
+               animate={{ scale: 1, opacity: 1, y: 0 }}
+               exit={{ scale: 0.9, opacity: 0, y: 20 }}
+               className="bg-white border-4 border-slate-900 rounded-[28px] p-8 max-w-md w-full shadow-[8px_8px_0px_0px_#0f172a] relative z-10"
+             >
+               <button 
+                 onClick={() => setShowSinglePlayerModal(false)}
+                 className="absolute top-4 right-4 w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center hover:bg-slate-200 transition-colors"
+               >
+                 <X size={20} strokeWidth={3} className="text-slate-900" />
+               </button>
+
+               <h2 className="text-3xl font-black uppercase tracking-tighter text-slate-900 mb-6">Mulai Sendiri</h2>
+
+               <form onSubmit={handleStartSinglePlayer} className="space-y-6">
+                 <div>
+                   <label className="block text-[11px] font-black tracking-widest uppercase text-slate-500 mb-2">Pilih Kelas</label>
+                   <select 
+                     value={singleKelas} 
+                     onChange={(e) => setSingleKelas(Number(e.target.value))}
+                     className="w-full px-5 py-4 rounded-xl border-4 border-slate-900 bg-white focus:outline-none focus:ring-4 focus:ring-emerald-500/20 text-lg font-black text-slate-900 uppercase tracking-wide appearance-none cursor-pointer"
+                   >
+                     {[1, 2, 3, 4, 5, 6].map(k => (
+                       <option key={k} value={k}>Kelas {k} SD</option>
+                     ))}
+                   </select>
+                 </div>
+                 
+                 <div>
+                   <label className="block text-[11px] font-black tracking-widest uppercase text-slate-500 mb-2">Jumlah Soal</label>
+                   <select 
+                     value={singleJumlahSoal} 
+                     onChange={(e) => setSingleJumlahSoal(Number(e.target.value))}
+                     className="w-full px-5 py-4 rounded-xl border-4 border-slate-900 bg-white focus:outline-none focus:ring-4 focus:ring-emerald-500/20 text-lg font-black text-slate-900 uppercase tracking-wide appearance-none cursor-pointer"
+                   >
+                     <option value={10}>10 Soal</option>
+                     <option value={20}>20 Soal</option>
+                     <option value={30}>30 Soal</option>
+                     <option value={50}>50 Soal</option>
+                   </select>
+                 </div>
+
+                 <motion.button
+                   whileHover={{ x: -2, y: -2, boxShadow: "10px 10px 0px 0px #0f172a" }}
+                   whileTap={{ scale: 0.98, x: 4, y: 4, boxShadow: "4px 4px 0px 0px #0f172a" }}
+                   type="submit"
+                   className="w-full mt-4 py-4 rounded-xl border-4 border-slate-900 text-white font-black text-xl shadow-[8px_8px_0px_0px_#0f172a] uppercase tracking-wider transition-all bg-emerald-500"
+                 >
+                   Gaskan!
+                 </motion.button>
+               </form>
+             </motion.div>
+          </div>
+        )}
+
         {showCreateModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div 
