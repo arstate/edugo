@@ -98,7 +98,7 @@ export default function VoiceChat({ roomCode, appId }: VoiceChatProps) {
   }, []);
 
   return (
-    <div className="fixed bottom-4 right-4 z-[100] flex gap-2 flex-col items-end">
+    <div className="fixed bottom-4 left-4 z-[100] flex gap-2 flex-col items-start">
       {!isJoined ? (
         <button
           onClick={joinVoice}
