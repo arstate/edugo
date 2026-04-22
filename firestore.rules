@@ -58,6 +58,15 @@ service cloud.firestore {
              validateRoomPlayer(data.players[0]); // Check at least first element structure
     }
 
+    function isValidChat(data) {
+       return data.keys().hasAll(['text', 'senderId', 'senderName', 'createdAt']) &&
+              data.keys().size() == 4 &&
+              data.text is string && data.text.size() > 0 && data.text.size() <= 200 &&
+              data.senderId is string && data.senderId == request.auth.uid &&
+              data.senderName is string && data.senderName.size() > 0 &&
+              data.createdAt == request.time;
+    }
+
     match /players/{playerId} {
       allow get: if isSignedIn() && isValidId(playerId) && request.auth.uid == playerId;
       
@@ -89,6 +98,11 @@ service cloud.firestore {
         // Action: Start Game or update status (Host only)
         (request.auth.uid == existing().hostId && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'questions', 'startTime', 'gameStartAtUnix']))
       );
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isValidChat(incoming());
+      }
     }
   }
 }

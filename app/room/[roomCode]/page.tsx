@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
-import { Users, Play, LogOut, Loader2, Copy, Crown, Medal, Award, Coins, Home } from 'lucide-react';
+import { Users, Play, LogOut, Loader2, Copy, Crown, Medal, Award, Coins, Home, MessageSquare, X, Send } from 'lucide-react';
 import { auth, db } from '../../../lib/firebase';
-import { doc, onSnapshot, updateDoc, serverTimestamp, runTransaction, increment, deleteDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, serverTimestamp, runTransaction, increment, deleteDoc, collection, addDoc, query, orderBy } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { generateMathQuestions, MathQuestion } from '../../../lib/questionGenerator';
 
@@ -33,6 +33,13 @@ interface RoomData {
   gameStartAtUnix: number | null;
 }
 
+interface ChatMessage {
+  id: string;
+  text: string;
+  senderId: string;
+  senderName: string;
+}
+
 export default function RoomPage() {
   const params = useParams();
   const router = useRouter();
@@ -48,6 +55,30 @@ export default function RoomPage() {
   const [elapsedTime, setElapsedTime] = useState('00:00');
   const [countdownTimer, setCountdownTimer] = useState<number | null>(null);
 
+  // Chat variables
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [seenMessagesCount, setSeenMessagesCount] = useState(0);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const initialMessagesCount = useRef(-1);
+
+  // Unread logic
+  const unreadCount = Math.max(0, messages.length - seenMessagesCount);
+
+  useEffect(() => {
+     if (isChatOpen) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setSeenMessagesCount(messages.length);
+     }
+  }, [isChatOpen, messages.length]);
+
+  useEffect(() => {
+     if (isChatOpen) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+     }
+  }, [messages, isChatOpen]);
+
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (!user) {
@@ -58,6 +89,44 @@ export default function RoomPage() {
     });
     return () => unsubscribeAuth();
   }, [router]);
+
+  // Chat Subscription Effect
+  useEffect(() => {
+     if (!roomCode) return;
+     const q = query(collection(db, 'rooms', roomCode, 'messages'), orderBy('createdAt', 'asc'));
+     const unsubscribeChat = onSnapshot(q, (snapshot) => {
+        const newMessages = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ChatMessage));
+        if (initialMessagesCount.current === -1) {
+            initialMessagesCount.current = newMessages.length;
+            setSeenMessagesCount(newMessages.length);
+        }
+        setMessages(newMessages);
+     }, (err) => {
+        console.error("Chat listener error:", err);
+     });
+     return () => unsubscribeChat();
+  }, [roomCode]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+     e.preventDefault();
+     if (!chatInput.trim() || !currentUserOption || !roomData) return;
+     const msg = chatInput.trim();
+     setChatInput('');
+     
+     const myPlayerData = roomData.players.find(p => p.uid === currentUserOption.uid);
+     const senderName = myPlayerData ? myPlayerData.name : 'Unknown';
+
+     try {
+        await addDoc(collection(db, 'rooms', roomCode, 'messages'), {
+           text: msg,
+           senderId: currentUserOption.uid,
+           senderName: senderName,
+           createdAt: serverTimestamp()
+        });
+     } catch(e) {
+        console.error("Error sending message", e);
+     }
+  };
 
   const handleLeaveRoom = async () => {
     if (!roomCode || !currentUserOption) return;
@@ -125,6 +194,7 @@ export default function RoomPage() {
   useEffect(() => {
     if (roomData?.status === 'preparing' && currentUserOption) {
         const myPlayer = roomData.players.find(p => p.uid === currentUserOption.uid);
+        // Only force ready if they weren't already ready
         if (myPlayer && !myPlayer.isReady) {
             const roomRef = doc(db, 'rooms', roomCode);
             runTransaction(db, async (t) => {
@@ -307,6 +377,27 @@ export default function RoomPage() {
     } catch (error) {
         console.error("Transaction failed: ", error);
         alert("Gagal mengirim jawaban, coba lagi.");
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
+
+  const handleReadyClick = async () => {
+    if (!roomCode || !currentUserOption || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+        const roomRef = doc(db, 'rooms', roomCode);
+        await runTransaction(db, async (t) => {
+            const docSnap = await t.get(roomRef);
+            if (!docSnap.exists()) return;
+            const data = docSnap.data();
+            const updatedPlayers = data.players.map((p: any) =>
+               p.uid === currentUserOption.uid ? { ...p, isReady: true } : p
+            );
+            t.update(roomRef, { players: updatedPlayers });
+        });
+    } catch(e) {
+        console.error("Error setting ready", e);
     } finally {
         setIsSubmitting(false);
     }
@@ -647,13 +738,18 @@ export default function RoomPage() {
               transition={{ delay: idx * 0.1, type: 'spring' }}
               className={`p-6 border-4 border-slate-900 rounded-2xl flex items-center gap-4 bg-white shadow-[6px_6px_0px_0px_#0f172a] ${player.uid === currentUserOption?.uid ? 'ring-4 ring-indigo-500 ring-offset-4 ring-offset-[#f8fafc]' : ''}`}
             >
-              <div className="w-14 h-14 bg-gradient-to-tr from-pink-500 to-rose-400 rounded-xl border-2 border-slate-900 flex items-center justify-center text-white font-black text-2xl shrink-0">
+              <div className="w-14 h-14 bg-gradient-to-tr from-pink-500 to-rose-400 rounded-xl border-2 border-slate-900 flex items-center justify-center text-white font-black text-2xl shrink-0 relative">
                 {player.name.charAt(0).toUpperCase()}
+                {player.isReady && !isHost && (
+                   <div className="absolute -bottom-2 -right-2 bg-emerald-500 border-2 border-slate-900 rounded-full w-6 h-6 flex items-center justify-center text-[10px]">
+                      ✅
+                   </div>
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <h4 className="text-xl font-black text-slate-900 uppercase truncate">{player.name}</h4>
                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {player.uid === roomData.hostId ? '👑 Room Host' : '⚔️ Challenger'}
+                  {player.uid === roomData.hostId ? '👑 Room Host' : (player.isReady ? '✅ Selesai Persiapan' : '⚔️ Challenger')}
                 </p>
               </div>
             </motion.div>
@@ -671,20 +767,119 @@ export default function RoomPage() {
       {/* Action Footer */}
       <div className="w-full max-w-2xl text-center">
         {isHost ? (
-          <motion.button
-            whileHover={{ y: -4, x: -4, boxShadow: "12px 12px 0px 0px #0f172a" }}
-            whileTap={{ scale: 0.98, x: 4, y: 4, boxShadow: "4px 4px 0px 0px #0f172a" }}
-            onClick={handleStartGame}
-            className="w-full py-6 bg-emerald-500 border-4 border-slate-900 rounded-2xl text-white font-black text-3xl uppercase tracking-widest shadow-[8px_8px_0px_0px_#0f172a] flex items-center justify-center gap-4 transition-all"
-          >
-            <Play fill="currentColor" size={32} /> Mulai Game
-          </motion.button>
-        ) : (
-          <div className="py-6 border-4 border-slate-900 border-dashed rounded-2xl text-slate-500 font-black text-xl uppercase tracking-widest bg-slate-100 flex items-center justify-center gap-4">
-            <Loader2 className="animate-spin" size={28} /> Menunggu Host Memulai...
+          <div className="space-y-4">
+             {roomData.players.length > 1 && roomData.players.filter(p => p.isReady).length < roomData.players.length - 1 && (
+                <div className="text-amber-500 font-black text-sm uppercase tracking-widest bg-amber-50 border-2 border-amber-200 py-2 rounded-lg">
+                   Ada pemain yang belum &quot;Siap&quot;, Game tetap bisa dimulai tapi disarankan menunggu!
+                </div>
+             )}
+             <motion.button
+               whileHover={{ y: -4, x: -4, boxShadow: "12px 12px 0px 0px #0f172a" }}
+               whileTap={{ scale: 0.98, x: 4, y: 4, boxShadow: "4px 4px 0px 0px #0f172a" }}
+               onClick={handleStartGame}
+               className="w-full py-6 bg-emerald-500 border-4 border-slate-900 rounded-2xl text-white font-black text-3xl uppercase tracking-widest shadow-[8px_8px_0px_0px_#0f172a] flex items-center justify-center gap-4 transition-all"
+             >
+               <Play fill="currentColor" size={32} /> Mulai Game
+             </motion.button>
           </div>
+        ) : (
+          roomData.players.find(p => p.uid === currentUserOption?.uid)?.isReady ? (
+            <div className="py-6 border-4 border-slate-900 border-dashed rounded-2xl text-slate-500 font-black text-xl uppercase tracking-widest bg-slate-100 flex items-center justify-center gap-4">
+              <Loader2 className="animate-spin" size={28} /> Menunggu Host Memulai...
+            </div>
+          ) : (
+            <motion.button
+              whileHover={isSubmitting ? {} : { y: -4, x: -4, boxShadow: "12px 12px 0px 0px #0f172a" }}
+              whileTap={isSubmitting ? {} : { scale: 0.98, x: 4, y: 4, boxShadow: "4px 4px 0px 0px #0f172a" }}
+              onClick={handleReadyClick}
+              disabled={isSubmitting}
+              className={`w-full py-6 border-4 border-slate-900 rounded-2xl text-white font-black text-3xl uppercase tracking-widest transition-all ${isSubmitting ? 'bg-slate-400 shadow-none translate-x-1 translate-y-1' : 'bg-indigo-600 shadow-[8px_8px_0px_0px_#0f172a]'}`}
+            >
+              {isSubmitting ? 'MEMPROSES...' : 'SIAP!'}
+            </motion.button>
+          )
         )}
       </div>
+
+      {/* Floating Chat UI for Lobby/Preparing */}
+      {(roomData.status === 'waiting' || roomData.status === 'preparing') && (
+         <>
+            <div className="fixed bottom-6 right-6 z-40">
+               {!isChatOpen && (
+                  <button 
+                     onClick={() => setIsChatOpen(true)} 
+                     className="relative bg-indigo-600 text-white p-4 rounded-full shadow-[4px_4px_0px_0px_#0f172a] hover:translate-y-[-2px] border-4 border-slate-900 transition-all flex items-center justify-center"
+                  >
+                     <MessageSquare size={28} />
+                     {unreadCount > 0 && (
+                        <span className="absolute -top-2 -right-2 bg-rose-500 text-white text-xs font-black min-w-[28px] h-7 flex items-center justify-center rounded-full border-2 border-slate-900">
+                           {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                     )}
+                  </button>
+               )}
+            </div>
+
+            {isChatOpen && (
+               <motion.div 
+                   initial={{ y: 20, opacity: 0, scale: 0.9 }} 
+                   animate={{ y: 0, opacity: 1, scale: 1 }} 
+                   className="fixed bottom-6 right-6 w-[340px] max-w-[calc(100vw-32px)] h-[450px] max-h-[70vh] bg-white border-4 border-slate-900 shadow-[8px_8px_0px_0px_#0f172a] rounded-[24px] flex flex-col z-50 overflow-hidden"
+               >
+                  <div className="bg-slate-900 text-white px-4 py-3 flex justify-between items-center shrink-0">
+                     <h3 className="font-black tracking-widest uppercase text-sm flex items-center gap-2">
+                        <MessageSquare size={16} /> Live Chat
+                     </h3>
+                     <button onClick={() => setIsChatOpen(false)} className="hover:text-rose-400 transition-colors p-1">
+                        <X size={20} className="stroke-[3px]" />
+                     </button>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50 flex flex-col min-h-0">
+                     {messages.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-50 space-y-2 mt-auto mb-auto">
+                           <MessageSquare size={32} />
+                           <span className="text-xs font-bold uppercase tracking-widest text-center">Belum ada obrolan.<br/>Sapa yang lain!</span>
+                        </div>
+                     ) : (
+                        messages.map(m => {
+                           const isMe = m.senderId === currentUserOption?.uid;
+                           return (
+                               <div key={m.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                                   <span className="text-[10px] font-bold text-slate-500 mb-1 mx-1 uppercase tracking-wider">{m.senderName}</span>
+                                   <div className={`px-4 py-2 max-w-[85%] text-sm font-bold border-2 border-slate-900 shadow-[2px_2px_0px_0px_#0f172a] break-words ${isMe ? 'bg-indigo-500 text-white rounded-2xl rounded-tr-md' : 'bg-white text-slate-800 rounded-2xl rounded-tl-md'}`}>
+                                       {m.text}
+                                   </div>
+                               </div>
+                           );
+                        })
+                     )}
+                     <div ref={messagesEndRef} className="shrink-0" />
+                  </div>
+                  
+                  <div className="p-3 bg-white border-t-4 border-slate-900 shrink-0">
+                     <form onSubmit={handleSendMessage} className="flex gap-2">
+                        <input 
+                           type="text" 
+                           value={chatInput} 
+                           onChange={e => setChatInput(e.target.value)} 
+                           maxLength={100} 
+                           placeholder="Ketik pesan..." 
+                           className="flex-1 bg-slate-100 border-2 border-slate-900 rounded-xl px-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-slate-400" 
+                        />
+                        <button 
+                           type="submit" 
+                           disabled={!chatInput.trim()} 
+                           className="bg-indigo-600 text-white p-2.5 rounded-xl border-2 border-slate-900 hover:bg-indigo-500 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed shadow-[2px_2px_0px_0px_#0f172a] disabled:shadow-[2px_2px_0px_0px_#94a3b8] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] disabled:active:translate-x-0 disabled:active:translate-y-0 disabled:active:shadow-[2px_2px_0px_0px_#94a3b8] transition-all flex items-center justify-center"
+                        >
+                           <Send size={18} strokeWidth={2.5} className={chatInput.trim() ? "translate-x-0.5 -translate-y-0.5" : ""} />
+                        </button>
+                     </form>
+                  </div>
+               </motion.div>
+            )}
+         </>
+      )}
     </main>
   );
 }
