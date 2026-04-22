@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, Crown, Coins, Home, Play } from 'lucide-react';
+import { LogOut, Crown, Coins, Home, Play, Loader2 } from 'lucide-react';
 import { generateMathQuestions, MathQuestion } from '../../lib/questionGenerator';
 
-export default function SinglePlayerPage() {
+function SinglePlayerContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const kelasParam = parseInt(searchParams.get('kelas') || '1');
@@ -73,7 +73,7 @@ export default function SinglePlayerPage() {
     setIsSubmitting(true);
 
     const currentQuestion = questions[progress];
-    const isCorrect = selectedOptionIndex === currentQuestion.correctOptionIndex;
+    const isCorrect = currentQuestion.options[selectedOptionIndex] === currentQuestion.correctAnswer;
 
     const newCorrectCount = isCorrect ? correctAnswers + 1 : correctAnswers;
     if (isCorrect) setCorrectAnswers(newCorrectCount);
@@ -231,7 +231,7 @@ export default function SinglePlayerPage() {
             >
                <div className="bg-white border-4 border-slate-900 rounded-[32px] p-8 md:p-12 mb-6 shadow-[8px_8px_0px_0px_#0f172a]">
                   <h3 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter text-center leading-tight">
-                     {currentQuestion.text}
+                     {currentQuestion.question}
                   </h3>
                </div>
 
@@ -252,5 +252,17 @@ export default function SinglePlayerPage() {
             </motion.div>
         )}
     </main>
+  );
+}
+
+export default function SinglePlayerPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Loader2 className="animate-spin text-indigo-600 w-16 h-16" />
+      </div>
+    }>
+      <SinglePlayerContent />
+    </Suspense>
   );
 }
