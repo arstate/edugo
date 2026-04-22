@@ -1,9 +1,9 @@
 import type {Metadata} from 'next';
-import './globals.css';
+import './globals.css'; // Global styles
 
 export const metadata: Metadata = {
-  title: 'EduQuest Multiplayer',
-  description: 'Game edukasi multiplayer dengan sistem otentikasi lokal dan Firebase.',
+  title: 'My Google AI Studio App',
+  description: 'My Google AI Studio App',
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
