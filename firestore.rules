@@ -69,6 +69,7 @@ service cloud.firestore {
     match /rooms/{roomId} {
       allow get: if isSignedIn() && isRoomCode(roomId);
       allow list: if isSignedIn();
+      allow delete: if isSignedIn() && isRoomCode(roomId);
 
       allow create: if isSignedIn() && isRoomCode(roomId) && isValidRoom(incoming()) && 
                     incoming().hostId == request.auth.uid && 
@@ -77,14 +78,14 @@ service cloud.firestore {
                     incoming().players[0].uid == request.auth.uid;
       
       allow update: if isSignedIn() && isRoomCode(roomId) && isValidRoom(incoming()) && (
-        // Action: Join Room (Anyone can add themselves to waiting room)
-        (existing().status == 'waiting' && incoming().diff(existing()).affectedKeys().hasOnly(['players'])) ||
+        // Action: Join Room or Player Leaves (Anyone can update players array regardless of status)
+        (incoming().diff(existing()).affectedKeys().hasOnly(['players'])) ||
+        
+        // Action: Update status by any alive player or host when everyone finished
+        (incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
         
         // Action: Start Game or update status (Host only)
-        (request.auth.uid == existing().hostId && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'questions', 'startTime'])) ||
-        
-        // Action: Update Progress (Any player in the room can update the players array)
-        (existing().status == 'playing' && incoming().diff(existing()).affectedKeys().hasOnly(['players']))
+        (request.auth.uid == existing().hostId && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'questions', 'startTime']))
       );
     }
   }

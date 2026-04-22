@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import { Users, Play, LogOut, Loader2, Copy, Crown, Medal, Award, Coins, Home } from 'lucide-react';
 import { auth, db } from '../../../lib/firebase';
-import { doc, onSnapshot, updateDoc, serverTimestamp, runTransaction, increment } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, serverTimestamp, runTransaction, increment, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { generateMathQuestions, MathQuestion } from '../../../lib/questionGenerator';
 
@@ -43,10 +43,10 @@ export default function RoomPage() {
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [earnedCoins, setEarnedCoins] = useState<number | null>(null);
+  const [elapsedTime, setElapsedTime] = useState('00:00');
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      // ... Auth effect remains exactly the same ...
       if (!user) {
         router.push('/');
       } else {
@@ -56,15 +56,63 @@ export default function RoomPage() {
     return () => unsubscribeAuth();
   }, [router]);
 
-  // Host only auto-finish
+  const handleLeaveRoom = async () => {
+    if (!roomCode || !currentUserOption) return;
+    try {
+        const roomRef = doc(db, 'rooms', roomCode);
+        await runTransaction(db, async (transaction) => {
+            const roomDoc = await transaction.get(roomRef);
+            if (!roomDoc.exists()) return;
+            const data = roomDoc.data();
+            const updatedPlayers = data.players.filter((p: any) => p.uid !== currentUserOption.uid);
+            
+            if (updatedPlayers.length === 0) {
+                transaction.delete(roomRef);
+            } else {
+                transaction.update(roomRef, { players: updatedPlayers });
+            }
+        });
+    } catch(e) {
+        console.error("Error leaving room", e);
+    }
+  };
+
   useEffect(() => {
-    if (roomData?.status === 'playing' && currentUserOption?.uid === roomData.hostId) {
+    const handleBeforeUnload = () => {
+       handleLeaveRoom();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+       window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomCode, currentUserOption]);
+
+  // General auto-finish (Any alive player can trigger this if all are finished)
+  useEffect(() => {
+    if (roomData?.status === 'playing') {
       const allFinished = roomData.players.every(p => p.isFinished);
       if (allFinished && roomData.players.length > 0) {
         updateDoc(doc(db, 'rooms', roomCode), { status: 'finished' }).catch(console.error);
       }
     }
-  }, [roomData, currentUserOption?.uid, roomCode]);
+  }, [roomData, roomCode]);
+
+  // Sub-timer for elapsedTime
+  useEffect(() => {
+    if (roomData?.status === 'playing' && roomData?.startTime) {
+      const interval = setInterval(() => {
+         const startMs = roomData.startTime.toMillis ? roomData.startTime.toMillis() : Date.now();
+         const diff = Math.floor((Date.now() - startMs) / 1000);
+         if (diff >= 0) {
+           const m = Math.floor(diff / 60).toString().padStart(2, '0');
+           const s = (diff % 60).toString().padStart(2, '0');
+           setElapsedTime(`${m}:${s}`);
+         }
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [roomData?.status, roomData?.startTime]);
 
   // Reward calculation and claim
   useEffect(() => {
@@ -243,29 +291,35 @@ export default function RoomPage() {
 
     return (
       <main className="min-h-screen flex flex-col items-center py-8 md:py-12 px-4 lg:px-8 bg-slate-50">
-        {/* Realtime Progress Bar for all players */}
-        <div className={`w-full max-w-4xl ${isFinished ? 'mb-16' : 'mb-8'}`}>
-            <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-center gap-2">
-                <Users size={16} /> Live Race Progress
-            </h3>
-            <div className="space-y-3">
+        {/* Realtime Compact Progress Bar for all players */}
+        <div className={`w-full max-w-2xl ${isFinished ? 'mb-12' : 'mb-6'}`}>
+            <div className="flex items-center justify-between mb-3 px-2">
+               <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                   <Users size={14} /> Live Race
+               </h3>
+               <div className="text-xs font-black text-indigo-500 tracking-widest flex items-center gap-1 bg-indigo-50 px-2 py-1 rounded-md border-2 border-indigo-200">
+                   ⏱️ {elapsedTime}
+               </div>
+            </div>
+            
+            <div className="space-y-2">
                {roomData.players.map(p => {
                   const percent = Math.min((p.progress / totalSoal) * 100, 100);
                   const isMe = p.uid === currentUserOption.uid;
                   return (
-                     <div key={p.uid} className={`flex items-center gap-3 p-3 border-4 ${isMe ? 'border-indigo-600 bg-indigo-50' : 'border-slate-900 bg-white'} rounded-2xl shadow-[4px_4px_0px_0px_#0f172a]`}>
-                        <div className={`w-10 h-10 rounded-xl border-2 border-slate-900 flex shrink-0 items-center justify-center text-white font-black text-lg ${isMe ? 'bg-indigo-600' : 'bg-slate-400'}`}>
-                           {p.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 relative h-6 bg-slate-200 rounded-full border-2 border-slate-900 overflow-hidden">
+                     <div key={p.uid} className={`flex items-center gap-2 p-1.5 border-2 ${isMe ? 'border-indigo-600 bg-indigo-50' : 'border-slate-800 bg-white'} rounded-xl shadow-[2px_2px_0px_0px_#0f172a]`}>
+                        <div className="flex-1 relative h-6 bg-slate-200 rounded-lg border-2 border-slate-900 overflow-hidden flex items-center">
                            <motion.div 
                              initial={{ width: 0 }}
                              animate={{ width: `${percent}%` }}
                              transition={{ type: 'spring', bounce: 0.1, duration: 0.8 }}
-                             className={`absolute top-0 left-0 h-full ${isMe ? 'bg-indigo-500' : 'bg-slate-500'}`}
+                             className={`absolute top-0 left-0 h-full ${isMe ? 'bg-indigo-400' : 'bg-slate-300'} border-r-2 border-slate-900`}
                            />
+                           <div className="relative z-10 px-3 text-[10px] sm:text-xs font-black text-slate-900 truncate uppercase w-full">
+                               {p.name} {isMe && <span className="text-indigo-700 opacity-80 ml-1">(Kamu)</span>}
+                           </div>
                         </div>
-                        <div className="shrink-0 w-12 text-center text-sm font-black text-slate-700">
+                        <div className="shrink-0 w-12 text-center text-[10px] sm:text-xs font-black text-slate-700 bg-white border-2 border-slate-900 rounded-md py-0.5">
                            {p.progress}/{totalSoal}
                         </div>
                      </div>
@@ -451,7 +505,10 @@ export default function RoomPage() {
       {/* Header Bar */}
       <header className="w-full max-w-5xl flex justify-between items-center mb-8 md:mb-12 gap-2">
         <button 
-          onClick={() => router.push('/')}
+          onClick={async () => {
+             await handleLeaveRoom();
+             router.push('/');
+          }}
           className="px-4 py-2.5 md:px-6 md:py-3 bg-white border-2 md:border-4 border-slate-900 rounded-xl text-slate-900 font-black uppercase tracking-widest shadow-[3px_3px_0px_0px_#0f172a] md:shadow-[4px_4px_0px_0px_#0f172a] hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all flex items-center gap-2 text-xs md:text-sm"
         >
           <LogOut className="w-4 h-4 md:w-[18px] md:h-[18px]" strokeWidth={3} /> 
