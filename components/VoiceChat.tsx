@@ -19,29 +19,36 @@ export default function VoiceChat({ roomCode, isReady }: { roomCode: string, isR
     initialized.current = true;
 
     const initAgora = async () => {
-      client.current = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+      try {
+        // 1. Create track first to force browser permission prompt
+        localAudioTrack.current = await AgoraRTC.createMicrophoneAudioTrack();
+        
+        // 2. Initialize client and join
+        client.current = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
 
-      client.current.on('user-published', async (user, mediaType) => {
-        await client.current!.subscribe(user, mediaType);
-        if (mediaType === 'audio') {
-          const remoteAudioTrack = user.audioTrack;
-          if (remoteAudioTrack) {
-            remoteTracks.current.set(user.uid.toString(), remoteAudioTrack);
-            if (audioOn) {
-              remoteAudioTrack.play();
+        client.current.on('user-published', async (user, mediaType) => {
+          await client.current!.subscribe(user, mediaType);
+          if (mediaType === 'audio') {
+            const remoteAudioTrack = user.audioTrack;
+            if (remoteAudioTrack) {
+              remoteTracks.current.set(user.uid.toString(), remoteAudioTrack);
+              if (audioOn) {
+                remoteAudioTrack.play();
+              }
             }
           }
-        }
-      });
+        });
 
-      client.current.on('user-unpublished', (user) => {
-        remoteTracks.current.delete(user.uid.toString());
-      });
+        client.current.on('user-unpublished', (user) => {
+          remoteTracks.current.delete(user.uid.toString());
+        });
 
-      await client.current.join(APP_ID, roomCode, null, null);
-      
-      localAudioTrack.current = await AgoraRTC.createMicrophoneAudioTrack();
-      await client.current.publish(localAudioTrack.current);
+        await client.current.join(APP_ID, roomCode, null, null);
+        await client.current.publish(localAudioTrack.current);
+      } catch (error) {
+        console.error("Agora initialization error:", error);
+        alert("Gagal mengakses mikrofon. Pastikan perizinan diberikan.");
+      }
     };
 
     initAgora();
