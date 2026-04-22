@@ -11,12 +11,57 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["playerName", "coins", "uid", "updatedAt"]
+    },
+    "Room": {
+      "title": "Room",
+      "description": "A multiplayer game room",
+      "type": "object",
+      "properties": {
+        "roomCode": { "type": "string" },
+        "hostId": { "type": "string" },
+        "status": { "type": "string", "enum": ["waiting", "playing", "finished"] },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "kelas": { "type": "number" },
+            "jumlahSoal": { "type": "number" }
+          },
+          "required": ["kelas", "jumlahSoal"]
+        },
+        "players": { 
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+               "uid": { "type": "string" },
+               "name": { "type": "string" },
+               "progress": { "type": "number" },
+               "score": { "type": "number" },
+               "isFinished": { "type": "boolean" },
+               "finishTime": { "type": ["string", "null"] }
+            },
+            "required": ["uid", "name", "progress", "score", "isFinished"]
+          }
+        },
+        "questions": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "startTime": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["roomCode", "hostId", "status", "settings", "players", "questions", "startTime"]
     }
   },
   "firestore": {
     "/players/{playerId}": {
       "schema": { "$ref": "#/entities/Player" },
       "description": "Stores player profiles. The playerId is the anonymous Auth UID or LocalStorage UID."
+    },
+    "/rooms/{roomId}": {
+      "schema": { "$ref": "#/entities/Room" },
+      "description": "Stores multiplayer rooms. The roomId is a 4-letter uppercase string."
     }
   }
 }

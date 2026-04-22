@@ -9,6 +9,10 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    function isRoomCode(id) {
+      return id is string && id.size() == 4 && id.matches('^[A-Z]{4}$');
+    }
+
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function isSignedIn() { return request.auth != null; }
@@ -22,6 +26,36 @@ service cloud.firestore {
              data.updatedAt == request.time;
     }
 
+    function isValidRoomSetting(settings) {
+      return settings.keys().hasAll(['kelas', 'jumlahSoal']) &&
+             settings.keys().size() == 2 &&
+             settings.kelas is number && settings.kelas >= 1 && settings.kelas <= 6 &&
+             settings.jumlahSoal is number && (settings.jumlahSoal == 10 || settings.jumlahSoal == 20 || settings.jumlahSoal == 30 || settings.jumlahSoal == 50);
+    }
+
+    function validateRoomPlayer(playerData) {
+       return playerData.keys().hasAll(['uid', 'name', 'progress', 'score', 'isFinished', 'finishTime']) &&
+              playerData.keys().size() == 6 &&
+              playerData.uid is string && playerData.uid.size() > 0 &&
+              playerData.name is string && playerData.name.size() > 0 &&
+              playerData.progress is number && playerData.progress >= 0 &&
+              playerData.score is number && playerData.score >= 0 &&
+              playerData.isFinished is bool;
+    }
+
+    function isValidRoom(data) {
+      return data.keys().hasAll(['roomCode', 'hostId', 'status', 'settings', 'players', 'questions', 'startTime']) &&
+             data.keys().size() == 7 &&
+             isRoomCode(data.roomCode) &&
+             data.hostId is string && data.hostId.size() > 0 &&
+             data.status in ['waiting', 'playing', 'finished'] &&
+             data.settings is map && isValidRoomSetting(data.settings) &&
+             data.players is list && data.players.size() > 0 && data.players.size() <= 6 &&
+             data.questions is list &&
+             (data.startTime == null || data.startTime is timestamp) &&
+             validateRoomPlayer(data.players[0]); // Check at least first element structure
+    }
+
     match /players/{playerId} {
       allow get: if isSignedIn() && isValidId(playerId) && request.auth.uid == playerId;
       
@@ -29,6 +63,28 @@ service cloud.firestore {
       
       allow update: if isSignedIn() && isValidId(playerId) && request.auth.uid == playerId && isValidPlayer(incoming()) && (
         (incoming().diff(existing()).affectedKeys().hasOnly(['playerName', 'coins', 'updatedAt']) && incoming().uid == existing().uid)
+      );
+    }
+
+    match /rooms/{roomId} {
+      allow get: if isSignedIn() && isRoomCode(roomId);
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn() && isRoomCode(roomId) && isValidRoom(incoming()) && 
+                    incoming().hostId == request.auth.uid && 
+                    incoming().status == 'waiting' &&
+                    incoming().players.size() == 1 &&
+                    incoming().players[0].uid == request.auth.uid;
+      
+      allow update: if isSignedIn() && isRoomCode(roomId) && isValidRoom(incoming()) && (
+        // Action: Join Room (Anyone can add themselves to waiting room)
+        (existing().status == 'waiting' && incoming().diff(existing()).affectedKeys().hasOnly(['players'])) ||
+        
+        // Action: Start Game or update status (Host only)
+        (request.auth.uid == existing().hostId && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'questions', 'startTime'])) ||
+        
+        // Action: Update Progress (Any player in the room can update the players array)
+        (existing().status == 'playing' && incoming().diff(existing()).affectedKeys().hasOnly(['players']))
       );
     }
   }
