@@ -72,6 +72,20 @@ export default function RoomPage() {
   // Unread logic
   const unreadCount = Math.max(0, messages.length - seenMessagesCount);
 
+  // Reset local game state when returning to lobby
+  useEffect(() => {
+    if (roomData?.status === 'waiting') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCorrectAnswers(0);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEarnedCoins(null);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setElapsedTime('00:00');
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCountdownTimer(null);
+    }
+  }, [roomData?.status]);
+
   useEffect(() => {
      if (isChatOpen) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -467,16 +481,27 @@ export default function RoomPage() {
   if (!roomData) return null;
 
   const isHost = currentUserOption?.uid === roomData.hostId;
+  const myPlayerData = roomData.players.find(p => p.uid === currentUserOption?.uid);
+  const totalSoal = roomData.settings.jumlahSoal;
+  const progress = myPlayerData?.progress || 0;
+  const currentQuestion = roomData.questions?.[progress];
+  const isFinished = myPlayerData?.isFinished || false;
 
-  if (roomData.status === 'preparing' || roomData.status === 'playing') {
-    const myPlayerData = roomData.players.find(p => p.uid === currentUserOption.uid);
-    const totalSoal = roomData.settings.jumlahSoal;
-    const progress = myPlayerData?.progress || 0;
-    const currentQuestion = roomData.questions?.[progress];
-    const isFinished = myPlayerData?.isFinished || false;
+  const sortedPlayersResult = [...roomData.players].sort((a, b) => {
+    if (a.score !== b.score) return b.score - a.score;
+    const aT = parseFloat(a.finishTime || "9999");
+    const bT = parseFloat(b.finishTime || "9999");
+    return aT - bT;
+  });
 
-    return (
-      <main className="min-h-screen flex flex-col items-center py-8 md:py-12 px-4 lg:px-8 bg-slate-50 overflow-x-hidden">
+  const rank1 = sortedPlayersResult[0];
+  const rank2 = sortedPlayersResult[1];
+  const rank3 = sortedPlayersResult[2];
+
+  return (
+    <div className="min-h-screen relative bg-slate-50 overflow-x-hidden">
+      {(roomData.status === 'preparing' || roomData.status === 'playing') && (
+        <div className="flex flex-col items-center py-8 md:py-12 px-4 lg:px-8">
         {/* Countdown Overlay during 'playing' */ }
         {countdownTimer !== null && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/90 backdrop-blur-sm">
@@ -592,24 +617,11 @@ export default function RoomPage() {
                 </p>
             </motion.div>
         )}
-      </main>
-    )
-  }
+        </div>
+      )}
 
-  if (roomData.status === 'finished') {
-    const sortedPlayers = [...roomData.players].sort((a, b) => {
-        if (a.score !== b.score) return b.score - a.score;
-        const aT = parseFloat(a.finishTime || "9999");
-        const bT = parseFloat(b.finishTime || "9999");
-        return aT - bT;
-    });
-
-    const rank1 = sortedPlayers[0];
-    const rank2 = sortedPlayers[1];
-    const rank3 = sortedPlayers[2];
-
-    return (
-      <main className="min-h-screen flex flex-col items-center py-8 md:py-12 px-4 lg:px-8 bg-slate-50 overflow-x-hidden">
+      {roomData.status === 'finished' && (
+        <div className="flex flex-col items-center py-8 md:py-12 px-4 lg:px-8">
         <h1 className="text-4xl md:text-6xl font-black uppercase text-slate-900 mb-2 tracking-tighter text-center">
             Hasil <span className="text-indigo-600">Pertandingan</span>
         </h1>
@@ -664,7 +676,7 @@ export default function RoomPage() {
 
         {/* Players List */}
         <div className="w-full max-w-3xl flex flex-col gap-3 mb-10">
-            {sortedPlayers.map((player, index) => (
+            {sortedPlayersResult.map((player, index) => (
                 <motion.div 
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -734,12 +746,11 @@ export default function RoomPage() {
               <Home size={24} /> Ke Beranda
            </button>
         </div>
-      </main>
-    );
-  }
+        </div>
+      )}
 
-  return (
-    <main className="min-h-screen flex flex-col items-center py-8 md:py-12 px-4 lg:px-8">
+      {roomData.status === 'waiting' && (
+        <div className="flex flex-col items-center py-8 md:py-12 px-4 lg:px-8 w-full max-w-7xl mx-auto">
       {/* Header Bar */}
       <header className="w-full max-w-5xl flex justify-between items-center mb-8 md:mb-12 gap-2">
         <button 
@@ -879,6 +890,8 @@ export default function RoomPage() {
           )
         )}
       </div>
+    </div>
+    )}
 
       {/* Floating Chat UI for Lobby/Preparing */}
       {(roomData.status === 'waiting' || roomData.status === 'preparing') && (
@@ -965,6 +978,6 @@ export default function RoomPage() {
         roomCode={roomCode} 
         appId={"0ce2dd48206541a39e21cec16f843e3e"} 
       />
-    </main>
+    </div>
   );
 }
