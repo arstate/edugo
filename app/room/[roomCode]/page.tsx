@@ -768,19 +768,38 @@ export default function RoomPage() {
       <div className="w-full max-w-2xl text-center">
         {isHost ? (
           <div className="space-y-4">
-             {roomData.players.length > 1 && roomData.players.filter(p => p.isReady).length < roomData.players.length - 1 && (
-                <div className="text-amber-500 font-black text-sm uppercase tracking-widest bg-amber-50 border-2 border-amber-200 py-2 rounded-lg">
-                   Ada pemain yang belum &quot;Siap&quot;, Game tetap bisa dimulai tapi disarankan menunggu!
+             {roomData.players.length > 1 && (() => {
+                const nonHostPlayers = roomData.players.filter(p => p.uid !== roomData.hostId);
+                const allReady = nonHostPlayers.every(p => p.isReady);
+                
+                if (!allReady) {
+                   return (
+                      <div className="py-6 border-4 border-slate-900 border-dashed rounded-2xl text-slate-500 font-black text-xl uppercase tracking-widest bg-slate-100 flex flex-col items-center justify-center gap-2">
+                        <Loader2 className="animate-spin mb-2" size={32} /> 
+                        <span className="text-center">Menunggu semua pemain <br className="sm:hidden" /> klik &quot;SIAP!&quot;...</span>
+                        <span className="text-[10px] sm:text-xs text-rose-500">Host tidak dapat memulai game sebelum semua peserta siap.</span>
+                      </div>
+                   );
+                }
+                
+                return (
+                   <motion.button
+                     whileHover={{ y: -4, x: -4, boxShadow: "12px 12px 0px 0px #0f172a" }}
+                     whileTap={{ scale: 0.98, x: 4, y: 4, boxShadow: "4px 4px 0px 0px #0f172a" }}
+                     onClick={handleStartGame}
+                     className="w-full py-6 bg-emerald-500 border-4 border-slate-900 rounded-2xl text-white font-black text-3xl uppercase tracking-widest shadow-[8px_8px_0px_0px_#0f172a] flex items-center justify-center gap-4 transition-all"
+                   >
+                     <Play fill="currentColor" size={32} /> Mulai Game
+                   </motion.button>
+                );
+             })()}
+             
+             {/* If only host in room */}
+             {roomData.players.length === 1 && (
+                <div className="py-6 border-4 border-slate-900 border-dashed rounded-2xl text-slate-500 font-black text-xl uppercase tracking-widest bg-slate-100 flex items-center justify-center gap-4 text-center">
+                  <span className="text-sm">Silakan tunggu kawan <br className="sm:hidden"/> atau bagikan kode room!</span>
                 </div>
              )}
-             <motion.button
-               whileHover={{ y: -4, x: -4, boxShadow: "12px 12px 0px 0px #0f172a" }}
-               whileTap={{ scale: 0.98, x: 4, y: 4, boxShadow: "4px 4px 0px 0px #0f172a" }}
-               onClick={handleStartGame}
-               className="w-full py-6 bg-emerald-500 border-4 border-slate-900 rounded-2xl text-white font-black text-3xl uppercase tracking-widest shadow-[8px_8px_0px_0px_#0f172a] flex items-center justify-center gap-4 transition-all"
-             >
-               <Play fill="currentColor" size={32} /> Mulai Game
-             </motion.button>
           </div>
         ) : (
           roomData.players.find(p => p.uid === currentUserOption?.uid)?.isReady ? (
