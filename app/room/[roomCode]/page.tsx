@@ -785,7 +785,7 @@ export default function RoomPage() {
         )}
       </AnimatePresence>
 
-      {isVoiceChatEnabled && <VoiceChat roomCode={roomCode} />}
+      {isVoiceChatEnabled && <VoiceChat roomCode={roomCode} isReady={isVoiceChatEnabled} />}
 
       {/* Header Bar */}
       <header className="w-full max-w-5xl flex justify-between items-center mb-8 md:mb-12 gap-2">
