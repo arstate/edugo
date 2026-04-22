@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
-import { Users, Play, LogOut, Loader2, Copy } from 'lucide-react';
+import { Users, Play, LogOut, Loader2, Copy, Crown, Medal, Award, Coins, Home } from 'lucide-react';
 import { auth, db } from '../../../lib/firebase';
-import { doc, onSnapshot, updateDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, serverTimestamp, runTransaction, increment } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { generateMathQuestions, MathQuestion } from '../../../lib/questionGenerator';
 
@@ -42,19 +42,70 @@ export default function RoomPage() {
   const [errorText, setErrorText] = useState<string | null>(null);
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [earnedCoins, setEarnedCoins] = useState<number | null>(null);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      // ... Auth effect remains exactly the same ...
       if (!user) {
-        // Not logged in, redirect to home
         router.push('/');
       } else {
         setCurrentUser(user);
       }
     });
-
     return () => unsubscribeAuth();
   }, [router]);
+
+  // Host only auto-finish
+  useEffect(() => {
+    if (roomData?.status === 'playing' && currentUserOption?.uid === roomData.hostId) {
+      const allFinished = roomData.players.every(p => p.isFinished);
+      if (allFinished && roomData.players.length > 0) {
+        updateDoc(doc(db, 'rooms', roomCode), { status: 'finished' }).catch(console.error);
+      }
+    }
+  }, [roomData, currentUserOption?.uid, roomCode]);
+
+  // Reward calculation and claim
+  useEffect(() => {
+    if (roomData?.status === 'finished' && currentUserOption) {
+      const claimedList = JSON.parse(localStorage.getItem('claimed_rewards') || '[]');
+      
+      const sortedPlayers = [...roomData.players].sort((a, b) => {
+        if (a.score !== b.score) return b.score - a.score;
+        const aTime = parseFloat(a.finishTime || "9999");
+        const bTime = parseFloat(b.finishTime || "9999");
+        return aTime - bTime;
+      });
+
+      const myRank = sortedPlayers.findIndex(p => p.uid === currentUserOption.uid) + 1;
+      const myPlayerData = roomData.players.find(p => p.uid === currentUserOption.uid);
+
+      if (myPlayerData && earnedCoins === null) {
+        const correctAnswersCount = Math.round((myPlayerData.score / 100) * roomData.settings.jumlahSoal);
+        const multiplier = 1 + ((roomData.settings.kelas - 1) * 0.2);
+        const baseCoin = Math.round(correctAnswersCount * 5 * multiplier);
+        const bonus = myRank === 1 ? 500 : myRank === 2 ? 200 : myRank === 3 ? 100 : 0;
+        const totalReward = baseCoin + bonus;
+        
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setEarnedCoins(totalReward);
+
+        if (!claimedList.includes(roomCode)) {
+          // Sync to Firestore
+          const playerRef = doc(db, 'players', currentUserOption.uid);
+          updateDoc(playerRef, {
+            coins: increment(totalReward),
+            updatedAt: serverTimestamp()
+          }).catch(console.error);
+
+          claimedList.push(roomCode);
+          localStorage.setItem('claimed_rewards', JSON.stringify(claimedList));
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomData?.status, currentUserOption, roomCode]);
 
   useEffect(() => {
     if (!roomCode || !currentUserOption) return;
@@ -273,6 +324,126 @@ export default function RoomPage() {
         )}
       </main>
     )
+  }
+
+  if (roomData.status === 'finished') {
+    const sortedPlayers = [...roomData.players].sort((a, b) => {
+        if (a.score !== b.score) return b.score - a.score;
+        const aT = parseFloat(a.finishTime || "9999");
+        const bT = parseFloat(b.finishTime || "9999");
+        return aT - bT;
+    });
+
+    const rank1 = sortedPlayers[0];
+    const rank2 = sortedPlayers[1];
+    const rank3 = sortedPlayers[2];
+
+    return (
+      <main className="min-h-screen flex flex-col items-center py-8 md:py-12 px-4 lg:px-8 bg-slate-50 overflow-x-hidden">
+        <h1 className="text-4xl md:text-6xl font-black uppercase text-slate-900 mb-2 tracking-tighter text-center">
+            Hasil <span className="text-indigo-600">Pertandingan</span>
+        </h1>
+        <p className="text-xs md:text-sm font-black text-slate-500 uppercase tracking-widest mb-12">
+            Kode Room: {roomCode}
+        </p>
+
+        {/* Podium Layout */}
+        <div className="flex justify-center items-end h-48 md:h-64 gap-2 md:gap-4 mb-16 w-full max-w-3xl">
+            {/* Rank 2 */}
+            {rank2 ? (
+                <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="w-24 md:w-32 h-36 md:h-48 bg-slate-200 border-4 border-slate-900 rounded-t-2xl shadow-[4px_4px_0px_0px_#0f172a] relative flex flex-col items-center justify-start pt-4 md:pt-6">
+                    <div className="absolute -top-10 md:-top-12 w-14 h-14 md:w-16 md:h-16 bg-white border-4 border-slate-900 rounded-2xl flex items-center justify-center font-black text-2xl shadow-sm z-10">
+                        {rank2.name.charAt(0)}
+                    </div>
+                    <Medal className="text-slate-400 mb-1 md:mb-2 w-6 h-6 md:w-8 md:h-8" strokeWidth={2.5} />
+                    <span className="text-2xl md:text-3xl font-black text-slate-500 leading-none">2</span>
+                    <div className="mt-auto pb-4 text-center">
+                        <p className="text-[10px] md:text-xs font-bold text-slate-600 uppercase tracking-wider">{rank2.score}%</p>
+                    </div>
+                </motion.div>
+            ) : <div className="w-24 md:w-32" />}
+
+            {/* Rank 1 */}
+            {rank1 && (
+                <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }} className="w-28 md:w-40 h-48 md:h-64 bg-amber-400 border-4 border-slate-900 rounded-t-2xl shadow-[4px_4px_0px_0px_#0f172a] relative flex flex-col items-center justify-start pt-4 md:pt-6 z-10">
+                    <div className="absolute -top-12 md:-top-16 w-16 h-16 md:w-20 md:h-20 bg-white border-4 border-slate-900 rounded-3xl flex items-center justify-center font-black text-3xl md:text-4xl shadow-sm z-10 text-indigo-600">
+                        {rank1.name.charAt(0)}
+                    </div>
+                    <Crown className="text-white mb-1 md:mb-2 w-8 h-8 md:w-10 md:h-10 drop-shadow-md" strokeWidth={2.5} />
+                    <span className="text-3xl md:text-5xl font-black text-white leading-none drop-shadow-md">1</span>
+                    <div className="mt-auto pb-4 text-center text-slate-900">
+                        <p className="text-[10px] md:text-xs font-black uppercase tracking-wider">{rank1.score}% / {rank1.finishTime}</p>
+                    </div>
+                </motion.div>
+            )}
+
+            {/* Rank 3 */}
+            {rank3 ? (
+                <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="w-24 md:w-32 h-28 md:h-36 bg-orange-700 border-4 border-slate-900 rounded-t-2xl shadow-[4px_4px_0px_0px_#0f172a] relative flex flex-col items-center justify-start pt-4 md:pt-6">
+                    <div className="absolute -top-10 md:-top-12 w-14 h-14 md:w-16 md:h-16 bg-white border-4 border-slate-900 rounded-2xl flex items-center justify-center font-black text-2xl shadow-sm z-10">
+                        {rank3.name.charAt(0)}
+                    </div>
+                    <Award className="text-white/80 mb-1 md:mb-2 w-6 h-6 md:w-8 md:h-8" strokeWidth={2.5} />
+                    <span className="text-2xl md:text-3xl font-black text-white/50 leading-none">3</span>
+                    <div className="mt-auto pb-4 text-center">
+                        <p className="text-[10px] md:text-xs font-bold text-white uppercase tracking-wider">{rank3.score}%</p>
+                    </div>
+                </motion.div>
+            ) : <div className="w-24 md:w-32" />}
+        </div>
+
+        {/* Players List */}
+        <div className="w-full max-w-3xl flex flex-col gap-3 mb-10">
+            {sortedPlayers.map((player, index) => (
+                <motion.div 
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.6 + (index * 0.1) }}
+                    key={player.uid} 
+                    className={`flex items-center p-4 border-4 border-slate-900 rounded-2xl ${player.uid === currentUserOption?.uid ? 'bg-indigo-50 border-indigo-600 ring-2 ring-indigo-200' : 'bg-white'} shadow-[4px_4px_0px_0px_#0f172a]`}
+                >
+                    <div className="w-8 md:w-10 font-black text-lg md:text-xl text-slate-400">
+                        #{index + 1}
+                    </div>
+                    <div className="font-black text-slate-900 text-lg md:text-xl flex-1 truncate uppercase">
+                        {player.name} {player.uid === currentUserOption?.uid && <span className="text-[10px] tracking-widest text-indigo-500 ml-2">(KAMU)</span>}
+                    </div>
+                    <div className="text-right">
+                        <div className="font-black text-slate-900 text-lg md:text-xl">{player.score}%</div>
+                        <div className="font-bold text-slate-500 text-[10px] md:text-xs">WAKTU: {player.finishTime}</div>
+                    </div>
+                </motion.div>
+            ))}
+        </div>
+
+        {/* Reward Box */}
+        {earnedCoins !== null && (
+            <motion.div 
+               initial={{ scale: 0.8, opacity: 0 }}
+               animate={{ scale: 1, opacity: 1 }}
+               transition={{ type: 'spring', delay: 1.5 }}
+               className="bg-amber-100 border-4 border-slate-900 p-6 md:p-8 rounded-3xl w-full max-w-3xl text-center shadow-[8px_8px_0px_0px_#0f172a] relative overflow-hidden mb-12"
+            >
+               <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-amber-200/50 to-transparent"></div>
+               <div className="relative z-10">
+                  <h3 className="text-sm font-black uppercase tracking-[0.2em] text-amber-700 mb-2">Total Hadiah</h3>
+                  <div className="flex items-center justify-center gap-4">
+                     <Coins size={48} className="text-amber-500 drop-shadow-sm" />
+                     <span className="text-5xl md:text-7xl font-black text-slate-900 tracking-tighter">+{earnedCoins}</span>
+                  </div>
+                  <p className="text-xs font-black uppercase text-amber-600 mt-2 tracking-widest">Koin ditambahkan ke profil</p>
+               </div>
+            </motion.div>
+        )}
+
+        <button 
+           onClick={() => router.push('/')}
+           className="px-8 py-5 bg-slate-900 border-4 border-slate-900 rounded-2xl text-white font-black text-xl uppercase tracking-widest shadow-[6px_6px_0px_0px_#0f172a] hover:translate-x-1 hover:translate-y-1 hover:shadow-none hover:bg-slate-800 transition-all flex items-center gap-3 mb-12"
+        >
+           <Home size={24} /> Ke Beranda
+        </button>
+      </main>
+    );
   }
 
   return (
