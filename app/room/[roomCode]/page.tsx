@@ -498,7 +498,7 @@ export default function RoomPage() {
           )}
         </AnimatePresence>
 
-        {isVoiceChatEnabled && <VoiceChat roomCode={roomCode} />}
+        {isVoiceChatEnabled && <div className="z-50"><VoiceChat roomCode={roomCode} /></div>}
 
         {/* Countdown Overlay during 'playing' */ }
         {countdownTimer !== null && (

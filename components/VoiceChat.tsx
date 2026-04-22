@@ -74,7 +74,7 @@ export default function VoiceChat({ roomCode }: { roomCode: string }) {
       {!isJoined ? (
         <button
           onClick={joinVoiceChat}
-          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-4 bg-emerald-500 text-white font-black uppercase tracking-widest rounded-full border-4 border-slate-900 shadow-[6px_6px_0px_0px_#0f172a] hover:bg-emerald-400 transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+          className="z-50 flex items-center gap-3 px-6 py-4 bg-emerald-500 text-white font-black uppercase tracking-widest rounded-full border-4 border-slate-900 shadow-[6px_6px_0px_0px_#0f172a] hover:bg-emerald-400 transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
         >
           <PhoneIncoming size={24} /> Gabung Voice Chat
         </button>
