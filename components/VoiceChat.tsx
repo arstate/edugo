@@ -27,8 +27,6 @@ export default function VoiceChat({ roomCode }: { roomCode: string }) {
             remoteTracks.current.set(user.uid.toString(), remoteAudioTrack);
             if (audioOn) {
               remoteAudioTrack.play();
-            } else {
-              remoteAudioTrack.setEnabled(false);
             }
           }
         }
@@ -65,7 +63,11 @@ export default function VoiceChat({ roomCode }: { roomCode: string }) {
 
   useEffect(() => {
     remoteTracks.current.forEach(track => {
-      track.setEnabled(audioOn);
+      if (audioOn) {
+        track.play();
+      } else {
+        track.stop();
+      }
     });
   }, [audioOn]);
 
