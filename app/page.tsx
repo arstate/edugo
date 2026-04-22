@@ -1,0 +1,256 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
+import { Gamepad2, Users, UserPlus, LogOut } from 'lucide-react';
+
+export default function Home() {
+  const [playerName, setPlayerName] = useState<string | null>(null);
+  const [inputName, setInputName] = useState('');
+  const [coins, setCoins] = useState<number>(0);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    // Check localStorage on mount
+    const storedName = localStorage.getItem('playerName');
+    const storedCoins = localStorage.getItem('coins');
+
+    if (storedName) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPlayerName(storedName);
+    }
+    
+    if (storedCoins) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCoins(parseInt(storedCoins, 10));
+    } else {
+      localStorage.setItem('coins', '0');
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCoins(0);
+    }
+    
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsLoaded(true);
+  }, []);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputName.trim()) return;
+
+    const newName = inputName.trim();
+    const newUid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    
+    localStorage.setItem('playerName', newName);
+    localStorage.setItem('uid', newUid);
+    localStorage.setItem('coins', '0');
+    
+    setPlayerName(newName);
+    setCoins(0);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('playerName');
+    localStorage.removeItem('uid');
+    setPlayerName(null);
+    setInputName('');
+  };
+
+  // Ensure content doesn't render mismatched initial server HTML by waiting for client-side load
+  if (!isLoaded) return null;
+
+  if (!playerName) {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, type: 'spring', bounce: 0.4 }}
+          className="bg-white border-4 border-slate-900 rounded-[28px] p-8 max-w-md w-full shadow-[8px_8px_0px_0px_#0f172a]"
+        >
+          <div className="flex justify-center mb-6">
+            <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-3xl shadow-[0_8px_20px_-4px_rgba(79,70,229,0.4)]">
+              EQ
+            </div>
+          </div>
+          
+          <h1 className="text-4xl font-black text-center text-slate-900 mb-2 uppercase tracking-tighter leading-none">Mulai<br/><span className="text-indigo-600">Main</span></h1>
+          <p className="text-center text-[11px] font-black tracking-[0.2em] uppercase text-slate-400 mb-8 mt-4">Masukkan Nama Kamu</p>
+          
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div>
+              <input
+                type="text"
+                maxLength={15}
+                value={inputName}
+                onChange={(e) => setInputName(e.target.value)}
+                placeholder="NAMA PLAYER"
+                className="w-full px-5 py-4 rounded-xl border-4 border-slate-900 bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/20 text-lg font-black text-slate-900 uppercase tracking-wide placeholder-slate-300"
+                required
+              />
+            </div>
+            <motion.button
+              whileHover={{ x: -2, y: -2, boxShadow: "10px 10px 0px 0px #0f172a" }}
+              whileTap={{ scale: 0.98, x: 4, y: 4, boxShadow: "4px 4px 0px 0px #0f172a" }}
+              type="submit"
+              className="w-full py-4 rounded-xl bg-indigo-600 border-4 border-slate-900 text-white font-black text-xl shadow-[8px_8px_0px_0px_#0f172a] uppercase tracking-wider transition-all"
+            >
+              Gas Main
+            </motion.button>
+          </form>
+        </motion.div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen flex flex-col items-center overflow-x-hidden">
+      {/* Header */}
+      <header className="w-full max-w-5xl px-6 pt-12 pb-4 flex justify-between items-center text-slate-900 relative z-10">
+        <motion.div 
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="flex items-center gap-4"
+        >
+          <div className="w-14 h-14 md:w-16 md:h-16 bg-indigo-600 rounded-2xl md:rounded-3xl flex items-center justify-center text-white font-black text-2xl md:text-3xl shadow-[0_8px_20px_-4px_rgba(79,70,229,0.4)] tracking-tighter">EQ</div>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase text-slate-900 leading-none">EduQuest</h1>
+            <p className="text-[9px] md:text-[10px] font-black tracking-[0.3em] uppercase text-indigo-500 mt-1 md:mt-1.5">Arena Belajar & Main</p>
+          </div>
+        </motion.div>
+
+        <div className="flex items-center gap-3 md:gap-4">
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex items-center gap-3 bg-white border-4 border-slate-900 p-1.5 pr-4 md:p-2 md:pr-6 rounded-full shadow-[4px_4px_0px_0px_#0f172a]"
+          >
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-tr from-pink-500 to-rose-400 rounded-full border-2 border-slate-900 flex items-center justify-center text-white font-black text-lg md:text-xl shrink-0">
+              {playerName?.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex flex-col">
+              <span className="text-xs md:text-sm font-black uppercase text-slate-900 truncate max-w-[80px] md:max-w-[120px]">{playerName}</span>
+              <div className="flex items-center gap-1 mt-0.5">
+                <span className="text-amber-500 drop-shadow-sm text-xs md:text-base">🪙</span>
+                <span className="text-[10px] md:text-xs font-black text-slate-500 tracking-tighter uppercase">{coins} Koin</span>
+              </div>
+            </div>
+          </motion.div>
+
+          <button 
+            onClick={handleLogout}
+            className="w-12 h-12 flex-shrink-0 bg-white border-4 border-slate-900 rounded-full shadow-[4px_4px_0px_0px_#0f172a] flex items-center justify-center text-slate-900 hover:translate-y-1 hover:translate-x-1 hover:shadow-none transition-all active:translate-y-1 active:translate-x-1"
+            title="Keluar"
+          >
+            <LogOut size={18} strokeWidth={3} />
+          </button>
+        </div>
+      </header>
+
+      {/* Main Menu Content */}
+      <div className="flex-1 w-full max-w-5xl px-6 flex flex-col justify-center pb-20 md:-mt-8 z-10 relative">
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, type: "spring" }}
+          className="space-y-12 md:space-y-16 w-full mt-10 md:mt-16"
+        >
+          <div className="text-center">
+            <span className="inline-block py-1.5 md:py-2 px-4 md:px-6 bg-amber-100 text-amber-700 rounded-full text-[10px] md:text-xs font-black tracking-widest uppercase mb-4 md:mb-6 border-2 border-amber-200 shadow-sm">Selamat Datang Kembali</span>
+            <h2 className="text-6xl md:text-[100px] font-black leading-[0.85] tracking-tighter text-slate-900 uppercase">Mainkan<br/><span className="text-indigo-600">Sekarang</span></h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 w-full max-w-5xl mx-auto">
+            <MenuButton 
+              icon="🕹️"
+              title={<>Single<br className="hidden md:block" /> Player</>}
+              subtitle="Latihan Mandiri"
+              onClick={() => console.log('Klik: Single Player')}
+              delay={0.1}
+              hoverClass="hover:bg-emerald-50"
+              iconClass="bg-emerald-100"
+            />
+            
+            <MenuButton 
+              icon="👑"
+              title={<>Buat<br className="hidden md:block" /> Room</>}
+              subtitle="Host Multiplayer"
+              onClick={() => console.log('Klik: Buat Room (Multiplayer)')}
+              delay={0.2}
+              hoverClass="hover:bg-blue-50"
+              iconClass="bg-blue-100"
+            />
+            
+            <MenuButton 
+              icon="⚔️"
+              title={<>Join<br className="hidden md:block" /> Room</>}
+              subtitle="Cari Teman Lawan"
+              onClick={() => console.log('Klik: Join Room (Multiplayer)')}
+              delay={0.3}
+              hoverClass="hover:bg-rose-50"
+              iconClass="bg-rose-100"
+            />
+          </div>
+        </motion.div>
+      </div>
+      
+      <div className="absolute top-[10%] right-0 p-12 opacity-[0.03] pointer-events-none select-none overflow-hidden hidden lg:block z-0">
+        <div className="text-[280px] font-black leading-none text-slate-900 tracking-tighter">QUEST</div>
+      </div>
+      
+      <footer className="w-full max-w-5xl px-6 pb-8 md:pb-12 flex justify-between items-end border-t-4 border-slate-900/10 pt-8 mt-auto z-10 hidden md:flex">
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Build 1.0.4-STABLE</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">&copy; 2024 EDUQUEST INTERACTIVE</p>
+        </div>
+        <div className="flex gap-12">
+          <div className="text-right">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Peringkat Global</p>
+            <p className="text-2xl font-black text-indigo-600">#452</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Kemenangan</p>
+            <p className="text-2xl font-black text-emerald-600 tracking-tighter">24</p>
+          </div>
+        </div>
+      </footer>
+    </main>
+  );
+}
+
+function MenuButton({ 
+  title, 
+  subtitle, 
+  onClick, 
+  icon, 
+  delay = 0,
+  hoverClass,
+  iconClass
+}: { 
+  title: React.ReactNode; 
+  subtitle: string; 
+  onClick: () => void; 
+  icon: string;
+  delay?: number;
+  hoverClass?: string;
+  iconClass?: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay: delay, type: "spring", bounce: 0.5 }}
+      whileHover={{ y: -4, x: -4, boxShadow: "12px 12px 0px 0px #0f172a" }}
+      whileTap={{ scale: 0.98, x: 4, y: 4, boxShadow: "4px 4px 0px 0px #0f172a" }}
+      onClick={onClick}
+      className={`bg-white border-4 border-slate-900 rounded-[24px] p-6 md:p-8 shadow-[8px_8px_0px_0px_#0f172a] transition-all cursor-pointer group flex flex-row md:flex-col items-center md:items-start text-left gap-5 md:gap-0 ${hoverClass}`}
+    >
+      <div className={`md:mb-6 shrink-0 w-14 h-14 md:w-16 md:h-16 ${iconClass} rounded-2xl flex items-center justify-center text-3xl md:text-4xl group-hover:scale-110 transition-transform duration-300 border-2 border-transparent group-hover:border-slate-900`}>
+        {icon}
+      </div>
+      <div className="flex-1">
+        <h3 className="text-xl md:text-3xl font-black uppercase leading-[1.1] mb-1.5 md:mb-2 text-slate-900 tracking-tight">{title}</h3>
+        <p className="text-[10px] md:text-[11px] text-slate-500 font-black uppercase tracking-widest">{subtitle}</p>
+      </div>
+    </motion.div>
+  );
+}
