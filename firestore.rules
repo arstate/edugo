@@ -29,7 +29,7 @@ service cloud.firestore {
     function isValidRoomSetting(settings) {
       return settings.keys().hasAll(['kelas', 'jumlahSoal']) &&
              settings.keys().size() == 2 &&
-             settings.kelas is number && settings.kelas >= 1 && settings.kelas <= 6 &&
+             settings.kelas is number && settings.kelas >= 1 && settings.kelas <= 12 &&
              settings.jumlahSoal is number && (settings.jumlahSoal == 10 || settings.jumlahSoal == 20 || settings.jumlahSoal == 30 || settings.jumlahSoal == 50);
     }
 
@@ -95,8 +95,8 @@ service cloud.firestore {
         // Action: Update status by any alive player or host when everyone finished
         (incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
         
-        // Action: Start Game or update status (Host only)
-        (request.auth.uid == existing().hostId && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'questions', 'startTime', 'gameStartAtUnix']))
+        // Action: Start Game, update status, or Reset/Rematch (Host only)
+        (request.auth.uid == existing().hostId && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'questions', 'startTime', 'gameStartAtUnix', 'players']))
       );
 
       match /messages/{messageId} {

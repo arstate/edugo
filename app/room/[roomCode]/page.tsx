@@ -394,7 +394,7 @@ export default function RoomPage() {
         const roomRef = doc(db, 'rooms', roomCode);
         await updateDoc(roomRef, {
             status: 'waiting',
-            questions: null,
+            questions: [],
             startTime: null,
             gameStartAtUnix: null,
             players: roomData.players.map(p => ({
