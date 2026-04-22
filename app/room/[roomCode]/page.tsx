@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import { Users, Play, LogOut, Loader2, Copy } from 'lucide-react';
 import { auth, db } from '../../../lib/firebase';
-import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { generateMathQuestions, MathQuestion } from '../../../lib/questionGenerator';
 
@@ -40,6 +40,8 @@ export default function RoomPage() {
   const [currentUserOption, setCurrentUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [correctAnswers, setCorrectAnswers] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
@@ -104,6 +106,56 @@ export default function RoomPage() {
     alert("Kode room disalin: " + roomCode);
   };
 
+  const handleAnswer = async (selectedOptionIndex: number) => {
+    if (!roomData || !currentUserOption || isSubmitting) return;
+    const myPlayer = roomData.players.find(p => p.uid === currentUserOption.uid);
+    if (!myPlayer || myPlayer.isFinished || !roomData.questions) return;
+
+    setIsSubmitting(true);
+    const currentQ = roomData.questions[myPlayer.progress];
+    const isCorrect = currentQ.options[selectedOptionIndex] === currentQ.correctAnswer;
+    
+    let newCorrectCount = correctAnswers;
+    if (isCorrect) {
+         newCorrectCount++;
+         setCorrectAnswers(newCorrectCount);
+    }
+
+    const newProgress = myPlayer.progress + 1;
+    const isFinishedNow = newProgress >= roomData.settings.jumlahSoal;
+    
+    const roomRef = doc(db, 'rooms', roomCode);
+
+    try {
+        await runTransaction(db, async (transaction) => {
+            const roomDoc = await transaction.get(roomRef);
+            if (!roomDoc.exists()) throw new Error("Room document does not exist!");
+            const data = roomDoc.data();
+            
+            const updatedPlayers = data.players.map((p: any) => {
+                if (p.uid === currentUserOption.uid) {
+                    if (isFinishedNow) {
+                        const startTimeMs = data.startTime.toMillis();
+                        const finishTimeStr = ((Date.now() - startTimeMs) / 1000).toFixed(1) + "s";
+                        const finalScore = Math.round((newCorrectCount / data.settings.jumlahSoal) * 100);
+                        return { ...p, progress: newProgress, isFinished: true, score: finalScore, finishTime: finishTimeStr };
+                    } else {
+                        return { ...p, progress: newProgress };
+                    }
+                }
+                return p;
+            });
+            
+            transaction.update(roomRef, { players: updatedPlayers });
+        });
+    } catch (error) {
+        console.error("Transaction failed: ", error);
+        alert("Gagal mengirim jawaban, coba lagi.");
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
@@ -131,15 +183,96 @@ export default function RoomPage() {
 
   const isHost = currentUserOption?.uid === roomData.hostId;
 
-  // Placeholder for when game starts
   if (roomData.status === 'playing') {
+    const myPlayerData = roomData.players.find(p => p.uid === currentUserOption.uid);
+    const totalSoal = roomData.settings.jumlahSoal;
+    const progress = myPlayerData?.progress || 0;
+    const currentQuestion = roomData.questions?.[progress];
+    const isFinished = myPlayerData?.isFinished || false;
+
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 text-center">
-        <h1 className="text-6xl font-black uppercase text-slate-900 mb-4 animate-pulse text-indigo-600">Game Dimulai!</h1>
-        <p className="text-xl font-bold text-slate-600">Status room: {roomData.status}</p>
-        <p className="text-sm font-bold text-slate-400 mt-8">(Implementasi halaman bermain akan ada di tahap berikutnya)</p>
-      </div>
-    );
+      <main className="min-h-screen flex flex-col items-center py-8 md:py-12 px-4 lg:px-8 bg-slate-50">
+        {/* Realtime Progress Bar for all players */}
+        <div className={`w-full max-w-4xl ${isFinished ? 'mb-16' : 'mb-8'}`}>
+            <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-center gap-2">
+                <Users size={16} /> Live Race Progress
+            </h3>
+            <div className="space-y-3">
+               {roomData.players.map(p => {
+                  const percent = Math.min((p.progress / totalSoal) * 100, 100);
+                  const isMe = p.uid === currentUserOption.uid;
+                  return (
+                     <div key={p.uid} className={`flex items-center gap-3 p-3 border-4 ${isMe ? 'border-indigo-600 bg-indigo-50' : 'border-slate-900 bg-white'} rounded-2xl shadow-[4px_4px_0px_0px_#0f172a]`}>
+                        <div className={`w-10 h-10 rounded-xl border-2 border-slate-900 flex shrink-0 items-center justify-center text-white font-black text-lg ${isMe ? 'bg-indigo-600' : 'bg-slate-400'}`}>
+                           {p.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 relative h-6 bg-slate-200 rounded-full border-2 border-slate-900 overflow-hidden">
+                           <motion.div 
+                             initial={{ width: 0 }}
+                             animate={{ width: `${percent}%` }}
+                             transition={{ type: 'spring', bounce: 0.1, duration: 0.8 }}
+                             className={`absolute top-0 left-0 h-full ${isMe ? 'bg-indigo-500' : 'bg-slate-500'}`}
+                           />
+                        </div>
+                        <div className="shrink-0 w-12 text-center text-sm font-black text-slate-700">
+                           {p.progress}/{totalSoal}
+                        </div>
+                     </div>
+                  )
+               })}
+            </div>
+        </div>
+
+        {/* Gameplay Area */}
+        {!isFinished && currentQuestion && (
+            <motion.div 
+              key={progress} // force re-animate on new question
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full max-w-3xl bg-white border-4 border-slate-900 rounded-[32px] p-8 md:p-12 shadow-[8px_8px_0px_0px_#0f172a] text-center"
+            >
+               <h2 className="text-[10px] md:text-xs font-black tracking-[0.2em] uppercase text-indigo-500 mb-6 drop-shadow-sm">
+                  🔹 Soal {progress + 1} dari {totalSoal} 🔹
+               </h2>
+               <h1 className="text-5xl md:text-7xl font-black text-slate-900 mb-10 md:mb-12 tracking-tight">
+                  {currentQuestion.question}
+               </h1>
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+                  {currentQuestion.options.map((opt, i) => (
+                     <motion.button 
+                        key={i}
+                        whileHover={isSubmitting ? {} : { scale: 1.02, y: -4, boxShadow: "6px 6px 0px 0px #0f172a" }}
+                        whileTap={isSubmitting ? {} : { scale: 0.98, x: 2, y: 2, boxShadow: "2px 2px 0px 0px #0f172a" }}
+                        onClick={() => handleAnswer(i)}
+                        disabled={isSubmitting}
+                        className={`py-6 px-4 bg-slate-50 border-4 border-slate-900 rounded-2xl text-2xl md:text-4xl font-black text-slate-900 shadow-[4px_4px_0px_0px_#0f172a] transition-all ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-600'}`}
+                     >
+                       {opt}
+                     </motion.button>
+                  ))}
+               </div>
+            </motion.div>
+        )}
+
+        {/* Spectator Area */}
+        {isFinished && (
+            <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="text-center mt-8 w-full max-w-2xl bg-white border-4 border-slate-900 p-10 rounded-[32px] shadow-[8px_8px_0px_0px_#0f172a]"
+            >
+                <div className="text-6xl mb-6">🎉</div>
+                <h2 className="text-3xl md:text-4xl font-black text-slate-900 uppercase tracking-tighter mb-4 animate-pulse">Menunggu Pemain Lain...</h2>
+                <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">
+                    SKOR SEMENTARA: <span className="text-indigo-600 text-xl">{myPlayerData?.score}%</span>
+                </p>
+                <p className="text-slate-500 font-bold uppercase tracking-widest text-sm mt-2">
+                    WAKTU: <span className="text-amber-600 text-xl">{myPlayerData?.finishTime}</span>
+                </p>
+            </motion.div>
+        )}
+      </main>
+    )
   }
 
   return (
