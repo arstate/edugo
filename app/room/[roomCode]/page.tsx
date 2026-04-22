@@ -615,12 +615,9 @@ export default function RoomPage() {
         </span>
         <div 
           onClick={handleCopyCode}
-          className="text-7xl md:text-9xl font-black text-slate-900 tracking-[0.2em] mb-6 flex justify-center items-center gap-4 cursor-pointer hover:text-indigo-600 transition-colors group"
+          className="text-7xl md:text-9xl font-black text-slate-900 tracking-[0.2em] mb-6 flex justify-center items-center cursor-pointer hover:text-indigo-600 transition-colors"
         >
           {roomData.roomCode}
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-            <Copy size={48} />
-          </div>
         </div>
         
         {/* Settings Badge */}
