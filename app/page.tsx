@@ -124,7 +124,8 @@ export default function Home() {
       progress: 0,
       score: 0,
       isFinished: false,
-      finishTime: null
+      finishTime: null,
+      isReady: false
     };
 
     try {
@@ -138,7 +139,8 @@ export default function Home() {
         },
         players: [hostPlayer],
         questions: [],
-        startTime: null
+        startTime: null,
+        gameStartAtUnix: null
       });
 
       router.push(`/room/${code}`);
@@ -189,7 +191,8 @@ export default function Home() {
           progress: 0,
           score: 0,
           isFinished: false,
-          finishTime: null
+          finishTime: null,
+          isReady: false
         };
 
         await updateDoc(roomRef, {

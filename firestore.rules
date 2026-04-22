@@ -34,25 +34,27 @@ service cloud.firestore {
     }
 
     function validateRoomPlayer(playerData) {
-       return playerData.keys().hasAll(['uid', 'name', 'progress', 'score', 'isFinished', 'finishTime']) &&
-              playerData.keys().size() == 6 &&
+       return playerData.keys().hasAll(['uid', 'name', 'progress', 'score', 'isFinished', 'finishTime', 'isReady']) &&
+              playerData.keys().size() == 7 &&
               playerData.uid is string && playerData.uid.size() > 0 &&
               playerData.name is string && playerData.name.size() > 0 &&
               playerData.progress is number && playerData.progress >= 0 &&
               playerData.score is number && playerData.score >= 0 &&
-              playerData.isFinished is bool;
+              playerData.isFinished is bool &&
+              playerData.isReady is bool;
     }
 
     function isValidRoom(data) {
-      return data.keys().hasAll(['roomCode', 'hostId', 'status', 'settings', 'players', 'questions', 'startTime']) &&
-             data.keys().size() == 7 &&
+      return data.keys().hasAll(['roomCode', 'hostId', 'status', 'settings', 'players', 'questions', 'startTime', 'gameStartAtUnix']) &&
+             data.keys().size() == 8 &&
              isRoomCode(data.roomCode) &&
              data.hostId is string && data.hostId.size() > 0 &&
-             data.status in ['waiting', 'playing', 'finished'] &&
+             data.status in ['waiting', 'preparing', 'playing', 'finished'] &&
              data.settings is map && isValidRoomSetting(data.settings) &&
              data.players is list && data.players.size() > 0 && data.players.size() <= 6 &&
              data.questions is list &&
              (data.startTime == null || data.startTime is timestamp) &&
+             (data.gameStartAtUnix == null || data.gameStartAtUnix is number) &&
              validateRoomPlayer(data.players[0]); // Check at least first element structure
     }
 
@@ -85,7 +87,7 @@ service cloud.firestore {
         (incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
         
         // Action: Start Game or update status (Host only)
-        (request.auth.uid == existing().hostId && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'questions', 'startTime']))
+        (request.auth.uid == existing().hostId && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'questions', 'startTime', 'gameStartAtUnix']))
       );
     }
   }

@@ -16,6 +16,7 @@ interface Player {
   score: number;
   isFinished: boolean;
   finishTime: string | null;
+  isReady: boolean;
 }
 
 interface RoomData {
@@ -29,6 +30,7 @@ interface RoomData {
   players: Player[];
   questions: MathQuestion[];
   startTime: any;
+  gameStartAtUnix: number | null;
 }
 
 export default function RoomPage() {
@@ -44,6 +46,7 @@ export default function RoomPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [earnedCoins, setEarnedCoins] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState('00:00');
+  const [countdownTimer, setCountdownTimer] = useState<number | null>(null);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
@@ -98,7 +101,62 @@ export default function RoomPage() {
     }
   }, [roomData, roomCode]);
 
+  // Countdown overlay timer logic
+  useEffect(() => {
+     if (roomData?.status === 'playing' && roomData.gameStartAtUnix) {
+        const checkTime = () => {
+           const remaining = Math.ceil((roomData.gameStartAtUnix! - Date.now()) / 1000);
+           if (remaining > 0) {
+               setCountdownTimer(remaining);
+           } else {
+               setCountdownTimer(null);
+           }
+        };
+        checkTime();
+        const intv = setInterval(checkTime, 500);
+        return () => clearInterval(intv);
+     } else {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setCountdownTimer(null);
+     }
+  }, [roomData?.status, roomData?.gameStartAtUnix]);
+
+  // Sync to Preparing state constraint
+  useEffect(() => {
+    if (roomData?.status === 'preparing' && currentUserOption) {
+        const myPlayer = roomData.players.find(p => p.uid === currentUserOption.uid);
+        if (myPlayer && !myPlayer.isReady) {
+            const roomRef = doc(db, 'rooms', roomCode);
+            runTransaction(db, async (t) => {
+                const docSnap = await t.get(roomRef);
+                if (!docSnap.exists()) return;
+                const data = docSnap.data();
+                const newPlayers = data.players.map((p: any) => 
+                    p.uid === currentUserOption.uid ? { ...p, isReady: true } : p
+                );
+                t.update(roomRef, { players: newPlayers });
+            }).catch(console.error);
+        }
+    }
+  }, [roomData?.status, currentUserOption, roomCode]);
+
+  // Host triggers final game start after all players ready
+  useEffect(() => {
+    if (roomData?.status === 'preparing' && roomData.hostId === currentUserOption?.uid) {
+        const allReady = roomData.players.every(p => p.isReady);
+        if (allReady && roomData.players.length > 0) {
+            const roomRef = doc(db, 'rooms', roomCode);
+            updateDoc(roomRef, {
+                status: 'playing',
+                gameStartAtUnix: Date.now() + 5000,
+                startTime: serverTimestamp()
+            }).catch(console.error);
+        }
+    }
+  }, [roomData?.status, roomData?.players, roomData?.hostId, currentUserOption?.uid, roomCode]);
+
   // Sub-timer for elapsedTime
+
   useEffect(() => {
     if (roomData?.status === 'playing' && roomData?.startTime) {
       const interval = setInterval(() => {
@@ -190,9 +248,8 @@ export default function RoomPage() {
       const generatedQuestions = generateMathQuestions(roomData.settings.kelas, roomData.settings.jumlahSoal);
       
       await updateDoc(roomRef, {
-        status: 'playing',
-        questions: generatedQuestions,
-        startTime: serverTimestamp()
+        status: 'preparing',
+        questions: generatedQuestions
       });
     } catch (error) {
       console.error("Error starting game:", error);
@@ -282,7 +339,7 @@ export default function RoomPage() {
 
   const isHost = currentUserOption?.uid === roomData.hostId;
 
-  if (roomData.status === 'playing') {
+  if (roomData.status === 'preparing' || roomData.status === 'playing') {
     const myPlayerData = roomData.players.find(p => p.uid === currentUserOption.uid);
     const totalSoal = roomData.settings.jumlahSoal;
     const progress = myPlayerData?.progress || 0;
@@ -290,7 +347,25 @@ export default function RoomPage() {
     const isFinished = myPlayerData?.isFinished || false;
 
     return (
-      <main className="min-h-screen flex flex-col items-center py-8 md:py-12 px-4 lg:px-8 bg-slate-50">
+      <main className="min-h-screen flex flex-col items-center py-8 md:py-12 px-4 lg:px-8 bg-slate-50 overflow-x-hidden">
+        {/* Countdown Overlay during 'playing' */ }
+        {countdownTimer !== null && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/90 backdrop-blur-sm">
+                <motion.div
+                    key={countdownTimer}
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 1.5, opacity: 0 }}
+                    className="text-[150px] md:text-[250px] font-black text-white drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)]"
+                >
+                    {countdownTimer}
+                </motion.div>
+                <div className="absolute top-20 md:top-32 text-center text-slate-300 font-black tracking-[0.3em] uppercase text-xl">
+                    Semua Pemain Siap!
+                </div>
+            </div>
+        )}
+
         {/* Realtime Compact Progress Bar for all players */}
         <div className={`w-full max-w-2xl ${isFinished ? 'mb-12' : 'mb-6'}`}>
             <div className="flex items-center justify-between mb-3 px-2">
@@ -329,7 +404,19 @@ export default function RoomPage() {
         </div>
 
         {/* Gameplay Area */}
-        {!isFinished && currentQuestion && (
+        {roomData.status === 'preparing' && (
+            <motion.div 
+               initial={{ opacity: 0, scale: 0.9 }}
+               animate={{ opacity: 1, scale: 1 }}
+               className="text-center mt-8 w-full max-w-2xl bg-white border-4 border-slate-900 p-10 rounded-[32px] shadow-[8px_8px_0px_0px_#0f172a]"
+            >
+               <Loader2 className="animate-spin text-indigo-600 w-16 h-16 mx-auto mb-6" />
+               <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tighter mb-2">Sinkronisasi Pemain</h2>
+               <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">Menunggu seluruh pembalap bersiap...</p>
+            </motion.div>
+        )}
+
+        {roomData.status === 'playing' && !isFinished && currentQuestion && (
             <motion.div 
               key={progress} // force re-animate on new question
               initial={{ opacity: 0, y: 20 }}
