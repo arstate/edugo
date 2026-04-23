@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Gamepad2, Users, UserPlus, LogOut, X } from 'lucide-react';
+import { Gamepad2, Users, UserPlus, LogOut, X, Crown, Swords } from 'lucide-react';
 import { auth, db } from '../lib/firebase';
 import { signInAnonymously, signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, serverTimestamp, arrayUnion, updateDoc } from 'firebase/firestore';
@@ -334,7 +334,7 @@ export default function Home() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 w-full max-w-5xl mx-auto">
             <MenuButton 
-              icon="🕹️"
+              icon={<Gamepad2 className="w-8 h-8 text-emerald-600" />}
               title={<>Single<br className="hidden md:block" /> Player</>}
               subtitle="Latihan Mandiri"
               onClick={() => setShowSinglePlayerModal(true)}
@@ -344,7 +344,7 @@ export default function Home() {
             />
             
             <MenuButton 
-              icon="👑"
+              icon={<Crown className="w-8 h-8 text-blue-600" />}
               title={<>Buat<br className="hidden md:block" /> Room</>}
               subtitle="Host Multiplayer"
               onClick={() => setShowCreateModal(true)}
@@ -354,7 +354,7 @@ export default function Home() {
             />
             
             <MenuButton 
-              icon="⚔️"
+              icon={<Swords className="w-8 h-8 text-rose-600" />}
               title={<>Join<br className="hidden md:block" /> Room</>}
               subtitle="Cari Teman Lawan"
               onClick={() => setShowJoinModal(true)}
@@ -612,7 +612,7 @@ function MenuButton({
   title: React.ReactNode; 
   subtitle: string; 
   onClick: () => void; 
-  icon: string;
+  icon: React.ReactNode;
   delay?: number;
   hoverClass?: string;
   iconClass?: string;
